@@ -39,6 +39,7 @@ import static org.mule.runtime.core.internal.component.ComponentAnnotations.ANNO
 import static org.mule.runtime.core.internal.component.ComponentAnnotations.ANNOTATION_PARAMETERS;
 import static org.mule.runtime.core.internal.exception.ErrorMapping.ANNOTATION_ERROR_MAPPINGS;
 import static org.mule.runtime.internal.dsl.DslConstants.CORE_PREFIX;
+
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.ComponentIdentifier;
 import org.mule.runtime.api.exception.ErrorTypeRepository;
@@ -51,7 +52,6 @@ import org.mule.runtime.config.internal.SpringConfigurationComponentLocator;
 import org.mule.runtime.config.internal.dsl.model.SpringComponentModel;
 import org.mule.runtime.config.internal.model.ComponentModel;
 import org.mule.runtime.core.api.exception.ErrorTypeMatcher;
-import org.mule.runtime.core.api.exception.Errors;
 import org.mule.runtime.core.api.exception.SingleErrorTypeMatcher;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.internal.el.mvel.MVELExpressionLanguage;
@@ -59,8 +59,6 @@ import org.mule.runtime.core.internal.exception.ErrorMapping;
 import org.mule.runtime.dsl.api.component.AttributeDefinition;
 import org.mule.runtime.dsl.api.component.ComponentBuildingDefinition;
 import org.mule.runtime.dsl.api.component.KeyAttributeDefinitionPair;
-
-import com.google.common.collect.ImmutableSet;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +72,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
+import com.google.common.collect.ImmutableSet;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanReference;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
@@ -192,6 +191,38 @@ public class BeanDefinitionFactory {
       return null;
     }
 
+    // Errors have to be processed no matter if component is enabled of not
+    processRaiseError(componentModel);
+    componentBuildingDefinitionRegistry.getBuildingDefinition(componentModel.getIdentifier())
+            .ifPresent(componentBuildingDefinition -> {
+              if ((componentModel.getType() != null) && Component.class.isAssignableFrom(componentModel.getType())) {
+                addAnnotation(ANNOTATION_NAME, componentModel.getIdentifier(), componentModel);
+                // We need to use a mutable map since spring will resolve the properties placeholder present in the value if needed
+                // and it will be done by mutating the same map.
+                addAnnotation(ANNOTATION_PARAMETERS, new HashMap<>(componentModel.getParameters()), componentModel);
+                // add any error mappings if present
+                List<ComponentModel> errorMappingComponents = componentModel.getInnerComponents().stream()
+                        .filter(innerComponent -> ERROR_MAPPING_IDENTIFIER.equals(innerComponent.getIdentifier())).collect(toList());
+                if (!errorMappingComponents.isEmpty()) {
+                  addAnnotation(ANNOTATION_ERROR_MAPPINGS, errorMappingComponents.stream().map(innerComponent -> {
+                    Map<String, String> parameters = innerComponent.getParameters();
+                    ComponentIdentifier source = parameters.containsKey(SOURCE_TYPE)
+                                                 ? buildFromStringRepresentation(parameters.get(SOURCE_TYPE)) : ANY;
+
+                    ErrorType errorType = errorTypeRepository
+                            .lookupErrorType(source)
+                            .orElseThrow(() -> new MuleRuntimeException(createStaticMessage("Could not find error '%s'.", source)));
+
+                    ErrorTypeMatcher errorTypeMatcher = new SingleErrorTypeMatcher(errorType);
+                    ErrorType targetValue = resolveErrorType(parameters.get(TARGET_TYPE));
+                    return new ErrorMapping(errorTypeMatcher, targetValue);
+                  }).collect(toList()), componentModel);
+                }
+                componentLocator.addComponentLocation(componentModel.getComponentLocation());
+                addAnnotation(ANNOTATION_COMPONENT_CONFIG, componentModel.getConfiguration(), componentModel);
+              }
+            });
+
     if (!componentModel.isEnabled()) {
       // Just register the location, for support of lazyInit scenarios
       componentLocator.addComponentLocation(componentModel.getComponentLocation());
@@ -205,37 +236,6 @@ public class BeanDefinitionFactory {
     // how core constructs are processed.
     processMuleConfiguration(componentModel, registry);
     processMuleSecurityManager(componentModel, registry);
-    processRaiseError(componentModel);
-
-    componentBuildingDefinitionRegistry.getBuildingDefinition(componentModel.getIdentifier())
-        .ifPresent(componentBuildingDefinition -> {
-          if ((componentModel.getType() != null) && Component.class.isAssignableFrom(componentModel.getType())) {
-            addAnnotation(ANNOTATION_NAME, componentModel.getIdentifier(), componentModel);
-            // We need to use a mutable map since spring will resolve the properties placeholder present in the value if needed
-            // and it will be done by mutating the same map.
-            addAnnotation(ANNOTATION_PARAMETERS, new HashMap<>(componentModel.getParameters()), componentModel);
-            // add any error mappings if present
-            List<ComponentModel> errorMappingComponents = componentModel.getInnerComponents().stream()
-                .filter(innerComponent -> ERROR_MAPPING_IDENTIFIER.equals(innerComponent.getIdentifier())).collect(toList());
-            if (!errorMappingComponents.isEmpty()) {
-              addAnnotation(ANNOTATION_ERROR_MAPPINGS, errorMappingComponents.stream().map(innerComponent -> {
-                Map<String, String> parameters = innerComponent.getParameters();
-                ComponentIdentifier source = parameters.containsKey(SOURCE_TYPE)
-                    ? buildFromStringRepresentation(parameters.get(SOURCE_TYPE)) : ANY;
-
-                ErrorType errorType = errorTypeRepository
-                    .lookupErrorType(source)
-                    .orElseThrow(() -> new MuleRuntimeException(createStaticMessage("Could not find error '%s'.", source)));
-
-                ErrorTypeMatcher errorTypeMatcher = new SingleErrorTypeMatcher(errorType);
-                ErrorType targetValue = resolveErrorType(parameters.get(TARGET_TYPE));
-                return new ErrorMapping(errorTypeMatcher, targetValue);
-              }).collect(toList()), componentModel);
-            }
-            componentLocator.addComponentLocation(componentModel.getComponentLocation());
-            addAnnotation(ANNOTATION_COMPONENT_CONFIG, componentModel.getConfiguration(), componentModel);
-          }
-        });
 
     addAnnotation(LOCATION_KEY, componentModel.getComponentLocation(), componentModel);
 
@@ -266,7 +266,8 @@ public class BeanDefinitionFactory {
       return errorTypeRepository.lookupErrorType(errorIdentifier)
           .orElseThrow(() -> new MuleRuntimeException(createStaticMessage(format("There's no MULE error named '%s'.",
                                                                                  identifier))));
-    } else if (errorTypeRepository.getErrorNamespaces().contains(namespace) && !syntheticErrorNamespaces.contains(namespace)) {
+    }
+    else if (errorTypeRepository.getErrorNamespaces().contains(namespace) && !syntheticErrorNamespaces.contains(namespace)) {
       throw new MuleRuntimeException(createStaticMessage(format("Cannot use error type '%s:%s': namespace already exists.",
                                                                 namespace, identifier)));
     } else if (syntheticErrorNamespaces.contains(namespace)) {

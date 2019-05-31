@@ -34,6 +34,7 @@ import static org.mule.runtime.dsl.api.xml.parser.XmlConfigurationDocumentLoader
 import static org.springframework.beans.factory.support.BeanDefinitionBuilder.genericBeanDefinition;
 import static org.springframework.context.annotation.AnnotationConfigUtils.CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME;
 import static org.springframework.context.annotation.AnnotationConfigUtils.REQUIRED_ANNOTATION_PROCESSOR_BEAN_NAME;
+
 import org.mule.runtime.api.artifact.Registry;
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.ComponentIdentifier;
@@ -224,8 +225,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
           .forEach(componentBuildingDefinitionRegistry::register);
     }
 
-    this.beanDefinitionFactory =
-        new BeanDefinitionFactory(componentBuildingDefinitionRegistry, muleContext.getErrorTypeRepository());
+    this.beanDefinitionFactory = new BeanDefinitionFactory(componentBuildingDefinitionRegistry, muleContext.getErrorTypeRepository());
 
     createApplicationModel();
     validateAllConfigElementHaveParsers();
@@ -233,8 +233,6 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
     this.configurationDependencyResolver =
         new ConfigurationDependencyResolver(applicationModel, componentBuildingDefinitionRegistry);
   }
-
-
 
   private static Optional<Set<ExtensionModel>> getExtensionModels(ExtensionManager extensionManager) {
     return ofNullable(extensionManager == null ? null
