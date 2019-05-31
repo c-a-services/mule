@@ -81,6 +81,8 @@ import javax.xml.namespace.QName;
 
 import org.reactivestreams.Publisher;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -99,6 +101,7 @@ public class ModuleFlowProcessingPhase
   private ErrorType sourceErrorResponseGenerateErrorType;
   private ErrorType sourceErrorResponseSendErrorType;
   private ConfigurationComponentLocator componentLocator;
+  protected static final Logger logger = LoggerFactory.getLogger(NotificationFiringProcessingPhase.class);
 
   private final PolicyManager policyManager;
 
@@ -188,6 +191,7 @@ public class ModuleFlowProcessingPhase
   private Consumer<CoreEvent> onMessageReceived(ModuleFlowProcessingPhaseTemplate template,
                                                 MessageProcessContext messageProcessContext, FlowConstruct flowConstruct) {
     return request -> {
+      logger.error("MESSAGE RECEIVED");
       fireNotification(messageProcessContext.getMessageSource(), request, flowConstruct, MESSAGE_RECEIVED);
       template.getNotificationFunctions().forEach(notificationFunction -> muleContext.getNotificationManager()
           .fireNotification(notificationFunction.apply(request, messageProcessContext.getMessageSource())));

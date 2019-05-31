@@ -8,18 +8,22 @@ package org.mule.runtime.core.internal.execution;
 
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.mule.runtime.core.api.config.i18n.CoreMessages;
 import org.mule.runtime.core.api.execution.ExecutionCallback;
 import org.mule.runtime.core.api.transaction.Transaction;
 import org.mule.runtime.core.api.transaction.TransactionConfig;
 import org.mule.runtime.core.api.transaction.TransactionCoordination;
 import org.mule.runtime.core.privileged.transaction.xa.IllegalTransactionStateException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ValidateTransactionalStateInterceptor<T> implements ExecutionInterceptor<T> {
 
   private final ExecutionInterceptor<T> next;
   private final TransactionConfig transactionConfig;
   private boolean isCompatibility;
+  protected static final Logger logger = LoggerFactory.getLogger(ValidateTransactionalStateInterceptor.class);
 
   public ValidateTransactionalStateInterceptor(ExecutionInterceptor<T> next, TransactionConfig transactionConfig,
                                                boolean isCompatibility) {
@@ -34,6 +38,7 @@ public class ValidateTransactionalStateInterceptor<T> implements ExecutionInterc
     if (transactionConfig.getAction() == TransactionConfig.ACTION_NEVER && tx != null) {
       throw new IllegalTransactionStateException(CoreMessages.transactionAvailableButActionIs("Never"));
     } else if (transactionConfig.getAction() == TransactionConfig.ACTION_ALWAYS_JOIN && tx == null) {
+      logger.error("ESTA ROTITO Thread: " + Thread.currentThread().getName());
       throw new IllegalTransactionStateException(CoreMessages.transactionNotAvailableButActionIs("Always Join"));
     } else if (!isCompatibility && transactionConfig.getAction() == TransactionConfig.ACTION_ALWAYS_BEGIN && tx != null
         && !tx.isXA()) {

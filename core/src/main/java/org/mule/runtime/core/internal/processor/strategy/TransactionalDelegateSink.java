@@ -16,6 +16,8 @@ import org.mule.runtime.core.api.processor.Sink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Supplier;
+
 /**
  * Delegate {@link Sink} that uses one of two {@link Sink}'s depending on if a transaction is in context or not.
  */
@@ -25,17 +27,33 @@ final class TransactionalDelegateSink implements Sink, Disposable {
 
   private final Sink transactionalSink;
   private final Sink sink;
+  private final Supplier<Sink> transactionalSinkSupplier;
 
   public TransactionalDelegateSink(Sink transactionalSink, Sink sink) {
     this.transactionalSink = transactionalSink;
     this.sink = sink;
+    transactionalSinkSupplier = null;
+  }
+
+  public TransactionalDelegateSink(Supplier<Sink> sinkSupplier, Sink sink) {
+    transactionalSinkSupplier = sinkSupplier;
+    this.sink = sink;
+    this.transactionalSink = null;
   }
 
   @Override
   public void accept(CoreEvent event) {
     if (isTransactionActive()) {
-      transactionalSink.accept(event);
+      LOGGER.error("PROCESS TX");
+      if (transactionalSinkSupplier == null) {
+        LOGGER.error("WITH SINK");
+        transactionalSink.accept(event);
+      } else {
+        LOGGER.error("WITH SUPPLIER");
+        transactionalSinkSupplier.get().accept(event);
+      }
     } else {
+      LOGGER.error("ESTA ROTITO");
       sink.accept(event);
     }
   }

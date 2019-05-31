@@ -6,6 +6,7 @@
  */
 package org.mule.runtime.core.api.transaction;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.mule.runtime.api.tx.TransactionException;
 import org.mule.runtime.core.privileged.transaction.xa.IllegalTransactionStateException;
 import org.mule.runtime.core.api.config.i18n.CoreMessages;
@@ -59,6 +60,8 @@ public final class TransactionCoordination {
     } finally {
       transactions.set(null);
       logTransactionUnbound(transaction);
+      logger.error("UNBINDING Tx from thread ");
+      //logger.error(ExceptionUtils.getStackTrace(new Throwable()));
     }
   }
 
@@ -92,6 +95,9 @@ public final class TransactionCoordination {
       }
       return;
     }
+    logger.error("BINDING");
+    //logger.error(ExceptionUtils.getStackTrace(new Throwable()));
+
 
     transactions.set(transaction);
     logTransactionBound(transaction);

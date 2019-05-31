@@ -12,6 +12,7 @@ import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.api.util.Preconditions.checkState;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.connection.ConnectionHandler;
@@ -20,6 +21,7 @@ import org.mule.runtime.api.i18n.I18nMessage;
 import org.mule.runtime.api.metadata.TypedValue;
 import org.mule.runtime.api.notification.Notification;
 import org.mule.runtime.api.tx.TransactionException;
+import org.mule.runtime.core.api.transaction.TransactionCoordination;
 import org.mule.runtime.core.internal.execution.NotificationFunction;
 import org.mule.runtime.extension.api.connectivity.TransactionalConnection;
 import org.mule.runtime.extension.api.notification.NotificationActionDefinition;
@@ -29,6 +31,8 @@ import org.mule.runtime.extension.api.tx.TransactionHandle;
 import org.mule.runtime.module.extension.internal.runtime.notification.DefaultExtensionNotification;
 import org.mule.runtime.module.extension.internal.runtime.transaction.DefaultTransactionHandle;
 import org.mule.runtime.module.extension.internal.runtime.transaction.NullTransactionHandle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -53,6 +57,7 @@ class DefaultSourceCallbackContext implements SourceCallbackContextAdapter {
   private TransactionHandle transactionHandle = NULL_TRANSACTION_HANDLE;
   private boolean dispatched = false;
   private final List<NotificationFunction> notificationFunctions = new LinkedList<>();
+  protected static final Logger logger = LoggerFactory.getLogger(DefaultSourceCallbackContext.class);
 
   /**
    * Creates a new instance
@@ -74,12 +79,13 @@ class DefaultSourceCallbackContext implements SourceCallbackContextAdapter {
     }
 
     this.connection = connection;
-
+    logger.error("INIT-TOTAL");
     try {
       if (sourceCallback.getTransactionConfig().isTransacted() && connection instanceof TransactionalConnection) {
         ConnectionHandler<Object> connectionHandler = sourceCallback.getSourceConnectionManager().getConnectionHandler(connection)
             .orElseThrow(() -> new TransactionException(createWrongConnectionMessage(connection)));
 
+        logger.error("INIT");
         sourceCallback.getTransactionSourceBinder().bindToTransaction(sourceCallback.getTransactionConfig(),
                                                                       sourceCallback.getConfigurationInstance(),
                                                                       sourceCallback.getSourceLocation(),
@@ -88,6 +94,8 @@ class DefaultSourceCallbackContext implements SourceCallbackContextAdapter {
       }
     } catch (Exception e) {
       releaseConnection();
+      logger.error("SE ROMPIO TODO CACHITO! " + Thread.currentThread().getName());
+      logger.error(ExceptionUtils.getStackTrace(new Throwable()));
       throw e;
     }
 

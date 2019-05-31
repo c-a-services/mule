@@ -95,8 +95,8 @@ public class TransactionAwareProactorStreamEmitterProcessingStrategyFactory exte
     @Override
     public Sink createSink(FlowConstruct flowConstruct, ReactiveProcessor pipeline) {
       Sink proactorSink = super.createSink(flowConstruct, pipeline);
-      Sink syncSink = BLOCKING_PROCESSING_STRATEGY_INSTANCE.createSink(flowConstruct, pipeline);
-      return new TransactionalDelegateSink(syncSink, proactorSink);
+      return new TransactionalDelegateSink(() -> BLOCKING_PROCESSING_STRATEGY_INSTANCE.createSink(flowConstruct, pipeline),
+                                           proactorSink);
     }
 
     @Override
