@@ -7,19 +7,18 @@
 package org.mule.runtime.core.internal.exception;
 
 import static reactor.core.publisher.Mono.just;
-
 import org.mule.runtime.api.component.location.Location;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.api.transaction.TransactionCoordination;
 import org.mule.runtime.core.privileged.exception.MessageRedeliveredException;
 import org.mule.runtime.core.privileged.exception.TemplateOnErrorHandler;
+import org.mule.runtime.core.privileged.transaction.TransactionAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-import org.mule.runtime.core.privileged.transaction.TransactionAdapter;
 import org.reactivestreams.Publisher;
 
 /**
@@ -35,9 +34,10 @@ public class OnErrorPropagateHandler extends TemplateOnErrorHandler {
   }
 
   @Override
-  protected Function<CoreEvent, CoreEvent> beforeRouting(Exception exception) {
+  protected Function<CoreEvent, CoreEvent> beforeRouting() {
     return event -> {
-      event = super.beforeRouting(exception).apply(event);
+      Exception exception = getException(event);
+      event = super.beforeRouting().apply(event);
       if (!isRedeliveryExhausted(exception) && isOwnedTransaction()) {
         rollback(exception);
       }
@@ -87,13 +87,16 @@ public class OnErrorPropagateHandler extends TemplateOnErrorHandler {
   }
 
   @Override
-  protected Function<CoreEvent, Publisher<CoreEvent>> route(Exception exception) {
-    if (isRedeliveryExhausted(exception)) {
-      logger.info("Message redelivery exhausted. No redelivery exhausted actions configured. Message consumed.");
-    } else {
-      return super.route(exception);
-    }
-    return event -> just(event);
+  protected Function<CoreEvent, Publisher<CoreEvent>> route() {
+    return event -> {
+      Exception exception = getException(event);
+      if (isRedeliveryExhausted(exception)) {
+        logger.info("Message redelivery exhausted. No redelivery exhausted actions configured. Message consumed.");
+      } else {
+        return super.route().apply(event);
+      }
+      return just(event);
+    };
   }
 
 }
