@@ -10,6 +10,7 @@ import static reactor.core.publisher.Mono.from;
 import static reactor.core.publisher.Mono.subscriberContext;
 import static reactor.core.scheduler.Schedulers.fromExecutorService;
 import org.mule.runtime.api.component.Component;
+import org.mule.runtime.api.component.execution.ComponentExecutionException;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
 import org.mule.runtime.core.internal.exception.MessagingException;
@@ -92,7 +93,13 @@ public class RxUtils {
                                              Function<CoreEvent, Publisher<CoreEvent>> function, Component component) {
     return Flux.from(publisher)
         .flatMap(event -> from(function.apply(event))
-            .onErrorMap(e -> !(e instanceof MessagingException), e -> new MessagingException(event, e, component)));
+            .onErrorMap(e -> !(e instanceof MessagingException),
+                        e -> {
+                          if (e instanceof ComponentExecutionException) {
+                            return new MessagingException(((CoreEvent) ((ComponentExecutionException) e).getEvent()), e);
+                          }
+                          return new MessagingException(event, e, component);
+                        }));
   }
 
   /**
