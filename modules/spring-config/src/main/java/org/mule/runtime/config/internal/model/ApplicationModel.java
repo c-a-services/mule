@@ -113,10 +113,9 @@ import java.util.stream.Stream;
 
 import javax.xml.namespace.QName;
 
-import org.slf4j.Logger;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import org.slf4j.Logger;
 
 /**
  * An {@code ApplicationModel} holds a representation of all the artifact configuration using an abstract model to represent any
@@ -356,6 +355,39 @@ public class ApplicationModel implements ArtifactAst {
       if (componentModel.getNameAttribute() != null) {
         namedTopLevelComponentModels.put(componentModel.getNameAttribute(), componentModel);
       }
+    });
+  }
+
+  private void resolveTypedComponentIdentifier(ExtensionModelHelper extensionModelHelper) {
+    executeOnEveryComponentTree(componentModel -> {
+      Optional<TypedComponentIdentifier> typedComponentIdentifier =
+          of(TypedComponentIdentifier.builder().identifier(componentModel.getIdentifier())
+              .type(resolveComponentType(componentModel, extensionModelHelper))
+              .build());
+
+      extensionModelHelper.findComponentModel(componentModel.getIdentifier())
+          .ifPresent(model -> componentModel
+              .setComponentModel(extensionModelHelper.lookupExtensionModelFor(componentModel.getIdentifier()).get(), model));
+      if (!componentModel.getModel(HasStereotypeModel.class).isPresent()) {
+        extensionModelHelper.findConfigurationModel(componentModel.getIdentifier())
+            .ifPresent(model -> componentModel
+                .setConfigurationModel(extensionModelHelper.lookupExtensionModelFor(componentModel.getIdentifier()).get(),
+                                       model));
+      }
+      if (!componentModel.getModel(HasStereotypeModel.class).isPresent()) {
+        extensionModelHelper.findConnectionProviderModel(componentModel.getIdentifier())
+            .ifPresent(model -> componentModel
+                .setConnectionProviderModel(extensionModelHelper.lookupExtensionModelFor(componentModel.getIdentifier()).get(),
+                                            model));
+      }
+      if (!componentModel.getModel(HasStereotypeModel.class).isPresent()) {
+        extensionModelHelper.findMetadataType(componentModel.getType())
+            .flatMap(t -> createMetadataTypeModelAdapter(t))
+            .ifPresent(componentModel::setMetadataTypeModelAdapter);
+      }
+
+      componentModel.setComponentType(typedComponentIdentifier.map(typedIdentifier -> typedIdentifier.getType())
+          .orElse(TypedComponentIdentifier.ComponentType.UNKNOWN));
     });
   }
 

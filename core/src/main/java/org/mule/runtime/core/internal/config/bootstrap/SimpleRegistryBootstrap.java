@@ -81,12 +81,11 @@ public class SimpleRegistryBootstrap extends AbstractRegistryBootstrap {
   @Override
   protected void doRegisterObject(ObjectBootstrapProperty bootstrapProperty) throws Exception {
     Object value = bootstrapProperty.getService().instantiateClass(bootstrapProperty.getClassName());
-    Class<?> meta = Object.class;
 
     if (value instanceof BootstrapObjectFactory) {
       setMuleContextIfNeeded(value, muleContext);
       value = ((BootstrapObjectFactory) value).create();
     }
-    ((MuleContextWithRegistry) muleContext).getRegistry().registerObject(bootstrapProperty.getKey(), value, meta);
+    ((MuleContextWithRegistry) muleContext).getRegistry().registerObject(bootstrapProperty.getKey(), value);
   }
 }

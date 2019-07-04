@@ -301,7 +301,7 @@ public class MuleRegistryHelper implements MuleRegistry {
   public void unregisterTransformer(String transformerName) throws MuleException {
     Transformer transformer = lookupTransformer(transformerName);
     notifyTransformerResolvers(transformer, TransformerResolver.RegistryAction.REMOVED);
-    registry.unregisterObject(transformerName, Transformer.class);
+    registry.unregisterObject(transformerName);
 
   }
 

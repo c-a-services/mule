@@ -397,7 +397,8 @@ public abstract class ComponentModel {
     this.configurationModel = model;
   }
 
-  public void setConnectionProviderModel(ConnectionProviderModel connectionProviderModel) {
+  public void setConnectionProviderModel(ExtensionModel extensionModel, ConnectionProviderModel connectionProviderModel) {
+    this.extensionModel = extensionModel;
     this.connectionProviderModel = connectionProviderModel;
   }
 
