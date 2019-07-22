@@ -16,6 +16,7 @@ import org.mule.runtime.core.privileged.execution.MessageProcessTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.reactivestreams.Publisher;
 
@@ -69,7 +70,7 @@ public interface ModuleFlowProcessingPhaseTemplate extends MessageProcessTemplat
    * @param parameters the resolved set of parameters required to send the response.
    * @return void publisher that will signal the success or failure of sending response to client.
    */
-  Publisher<Void> sendResponseToClient(CoreEvent response, Map<String, Object> parameters);
+  CompletableFuture<Void> sendResponseToClient(CoreEvent response, Map<String, Object> parameters);
 
 
   /**
@@ -79,7 +80,7 @@ public interface ModuleFlowProcessingPhaseTemplate extends MessageProcessTemplat
    * @param parameters the resolved set of parameters required to send the failure response.
    * @return void publisher that will signal the success or failure of sending failure response to client.
    */
-  Publisher<Void> sendFailureResponseToClient(MessagingException exception, Map<String, Object> parameters);
+  CompletableFuture<Void> sendFailureResponseToClient(MessagingException exception, Map<String, Object> parameters);
 
   /**
    * Template method to be executed after the flow completes it's execution including any policy that may be applied.

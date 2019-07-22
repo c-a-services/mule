@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 import org.reactivestreams.Publisher;
@@ -196,8 +197,8 @@ public class CompositeSourcePolicy
    *         and the {@link MessagingException} thrown by the policy chain execution when processing completes.
    */
   @Override
-  public Publisher<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
-                                                                                         MessageSourceResponseParametersProcessor respParamProcessor) {
+  public CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
+                                                                                                 MessageSourceResponseParametersProcessor respParamProcessor) {
     return commonPolicy.process(sourceEvent, respParamProcessor);
   }
 
