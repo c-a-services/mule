@@ -17,8 +17,7 @@ import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.message.InternalEvent;
 import org.mule.runtime.core.internal.rx.FluxSinkRecorder;
 
-import org.reactivestreams.Publisher;
-
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 import reactor.core.publisher.Flux;
@@ -84,8 +83,8 @@ public class NoSourcePolicy implements SourcePolicy, Disposable {
   }
 
   @Override
-  public Publisher<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
-                                                                                         MessageSourceResponseParametersProcessor respParamProcessor) {
+  public CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
+                                                                                                 MessageSourceResponseParametersProcessor respParamProcessor) {
     return commonPolicy.process(sourceEvent, respParamProcessor);
   }
 

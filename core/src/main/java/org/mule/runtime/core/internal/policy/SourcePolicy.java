@@ -10,7 +10,7 @@ import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.processor.Processor;
 
-import org.reactivestreams.Publisher;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Interceptor of a {@link Processor} that executes logic before and after it. It allows to modify the content of the response (if
@@ -30,7 +30,7 @@ public interface SourcePolicy {
    *        source.
    * @return the result of processing the {@code event} through the policy chain.
    */
-  Publisher<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
-                                                                                  MessageSourceResponseParametersProcessor messageSourceResponseParametersProcessor);
+  CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
+                                                                                          MessageSourceResponseParametersProcessor messageSourceResponseParametersProcessor);
 
 }

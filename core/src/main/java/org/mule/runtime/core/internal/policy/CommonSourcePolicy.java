@@ -12,8 +12,6 @@ import static java.util.Optional.empty;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.core.api.functional.Either.left;
 import static org.mule.runtime.core.internal.event.EventQuickCopy.quickCopy;
-import static reactor.core.publisher.Mono.create;
-import static reactor.core.publisher.Mono.just;
 
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.functional.Either;
@@ -28,12 +26,11 @@ import org.mule.runtime.core.privileged.event.BaseEventContext;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
-import org.reactivestreams.Publisher;
 import reactor.core.publisher.FluxSink;
-import reactor.core.publisher.MonoSink;
 
 /**
  * Common behavior for flow dispatching, whether policies are applied or not.
@@ -41,7 +38,7 @@ import reactor.core.publisher.MonoSink;
 class CommonSourcePolicy {
 
   public static final String POLICY_SOURCE_PARAMETERS_PROCESSOR = "policy.source.parametersProcessor";
-  public static final String POLICY_SOURCE_CALLER_SINK = "policy.source.callerSink";
+  public static final String POLICY_SOURCE_COMPLETABLE_FUTURE = "policy.source.completableFuture";
 
   private final FluxSinkSupplier<CoreEvent> policySink;
   private final AtomicBoolean disposed;
@@ -62,27 +59,27 @@ class CommonSourcePolicy {
     this.disposed = new AtomicBoolean(false);
   }
 
-  public Publisher<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
-                                                                                         MessageSourceResponseParametersProcessor respParamProcessor) {
+  public CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
+                                                                                                 MessageSourceResponseParametersProcessor respParamProcessor) {
     return readWriteLock.withReadLock(lockReleaser -> {
+      CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> future = new CompletableFuture<>();
       if (!disposed.get()) {
-        return create(callerSink -> {
-          policySink.get().next(quickCopy(sourceEvent, of(POLICY_SOURCE_PARAMETERS_PROCESSOR, respParamProcessor,
-                                                          POLICY_SOURCE_CALLER_SINK, callerSink)));
-        });
+
+        policySink.get().next(quickCopy(sourceEvent, of(POLICY_SOURCE_PARAMETERS_PROCESSOR, respParamProcessor,
+                                                        POLICY_SOURCE_COMPLETABLE_FUTURE, future)));
       } else {
-        return just(sourceEvent)
-            .map(event -> {
-              MessagingException me = new MessagingException(createStaticMessage("Source policy already disposed"), sourceEvent);
 
-              Supplier<Map<String, Object>> errorParameters = sourcePolicyParametersTransformer.isPresent()
-                  ? (() -> sourcePolicyParametersTransformer.get().fromMessageToErrorResponseParameters(sourceEvent.getMessage()))
-                  : (() -> respParamProcessor.getFailedExecutionResponseParametersFunction().apply(sourceEvent));
+        MessagingException me = new MessagingException(createStaticMessage("Source policy already disposed"), sourceEvent);
 
-              SourcePolicyFailureResult result = new SourcePolicyFailureResult(me, errorParameters);
-              return left(result);
-            });
+        Supplier<Map<String, Object>> errorParameters = sourcePolicyParametersTransformer.isPresent()
+            ? (() -> sourcePolicyParametersTransformer.get().fromMessageToErrorResponseParameters(sourceEvent.getMessage()))
+            : (() -> respParamProcessor.getFailedExecutionResponseParametersFunction().apply(sourceEvent));
+
+        SourcePolicyFailureResult result = new SourcePolicyFailureResult(me, errorParameters);
+        future.complete(left(result));
       }
+
+      return future;
     });
   }
 
@@ -95,8 +92,7 @@ class CommonSourcePolicy {
       ((BaseEventContext) event.getContext()).success(event);
     }
 
-    ((MonoSink<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>>) ((InternalEvent) event)
-        .getInternalParameter(POLICY_SOURCE_CALLER_SINK)).success(result);
+    recoverFuture(event).complete(result);
   }
 
   public void finishFlowProcessing(CoreEvent event, Either<SourcePolicyFailureResult, SourcePolicySuccessResult> result,
@@ -105,8 +101,11 @@ class CommonSourcePolicy {
       ((BaseEventContext) event.getContext()).error(error);
     }
 
-    ((MonoSink<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>>) ((InternalEvent) event)
-        .getInternalParameter(POLICY_SOURCE_CALLER_SINK)).success(result);
+    recoverFuture(event).complete(result);
+  }
+
+  private CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> recoverFuture(CoreEvent event) {
+    return ((InternalEvent) event).getInternalParameter(POLICY_SOURCE_COMPLETABLE_FUTURE);
   }
 
   public void dispose() {
