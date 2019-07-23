@@ -20,7 +20,7 @@ import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Ha
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Unhandleable.FLOW_BACK_PRESSURE;
 import static org.mule.runtime.core.api.functional.Either.left;
 import static org.mule.runtime.core.api.functional.Either.right;
-import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.stopIfNeeded;
 import static org.mule.runtime.core.api.rx.Exceptions.unwrap;
 import static org.mule.runtime.core.internal.event.EventQuickCopy.quickCopy;
 import static org.mule.runtime.core.internal.message.ErrorBuilder.builder;
@@ -31,7 +31,6 @@ import static org.mule.runtime.core.internal.util.message.MessageUtils.toMessage
 import static org.mule.runtime.core.internal.util.rx.RxUtils.createRoundRobinFluxSupplier;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.applyWithChildContext;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processToApply;
-import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.publisher.Flux.from;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.error;
@@ -47,9 +46,10 @@ import org.mule.runtime.api.exception.DefaultMuleException;
 import org.mule.runtime.api.exception.ErrorTypeRepository;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
-import org.mule.runtime.api.lifecycle.Disposable;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
+import org.mule.runtime.api.lifecycle.Startable;
+import org.mule.runtime.api.lifecycle.Stoppable;
 import org.mule.runtime.api.message.ErrorType;
 import org.mule.runtime.api.message.Message;
 import org.mule.runtime.api.metadata.TypedValue;
@@ -96,7 +96,6 @@ import javax.inject.Inject;
 import javax.xml.namespace.QName;
 
 import org.reactivestreams.Publisher;
-import org.slf4j.Logger;
 import reactor.core.publisher.Mono;
 
 /**
@@ -107,9 +106,8 @@ import reactor.core.publisher.Mono;
  * This implementation will know how to process messages from extension's sources
  */
 public class ModuleFlowProcessingPhase
-    extends NotificationFiringProcessingPhase<ModuleFlowProcessingPhaseTemplate> implements Initialisable, Disposable {
+    extends NotificationFiringProcessingPhase<ModuleFlowProcessingPhaseTemplate> implements Initialisable, Startable, Stoppable {
 
-  private static final Logger LOGGER = getLogger(ModuleFlowProcessingPhase.class);
   private static final String PHASE_CONTEXT = "moduleProcessingPhase.phaseContext";
 
   private ErrorType sourceResponseGenerateErrorType;
@@ -155,14 +153,17 @@ public class ModuleFlowProcessingPhase
         additionalInterceptors.add(0, reactiveInterceptorAdapter);
       });
     }
+  }
 
+  @Override
+  public void start() throws MuleException {
     Function<SourcePolicyFailureResult, CompletableFuture<PhaseContext>> onPolicyFailure = policyFailure();
     Function<SourcePolicySuccessResult, CompletableFuture<PhaseContext>> onPolicySuccess = policySuccess();
 
     phaseFlux = createRoundRobinFluxSupplier(flux -> {
       return flux
           .flatMap(phaseContext -> {
-            onMessageReceived();
+            onMessageReceived(phaseContext);
             try {
               phaseContext.flowConstruct.checkBackpressure(phaseContext.event);
               // Process policy and in turn flow emitting Either<SourcePolicyFailureResult,SourcePolicySuccessResult>> when
@@ -178,16 +179,13 @@ public class ModuleFlowProcessingPhase
               return error(new EventProcessingException(phaseContext.event, e));
             }
           })
-          .flatMap(policyResult -> {
-            return fromFuture(policyResult.reduce(onPolicyFailure, onPolicySuccess)
-                .thenAccept(ctx -> {
-                  try {
-                    ctx.phaseResultNotifier.phaseSuccessfully();
-                  } finally {
-                    ctx.responseCompletion.complete(null);
-                  }
-                }));
-          })
+          .flatMap(policyResult -> fromFuture(policyResult.reduce(onPolicyFailure, onPolicySuccess).thenAccept(ctx -> {
+            try {
+              ctx.phaseResultNotifier.phaseSuccessfully();
+            } finally {
+              ctx.responseCompletion.complete(null);
+            }
+          })))
           .onErrorContinue((e, v) -> {
             e = unwrap(e);
             PhaseContext ctx = recoverPhaseContext(v, e);
@@ -201,8 +199,8 @@ public class ModuleFlowProcessingPhase
   }
 
   @Override
-  public void dispose() {
-    disposeIfNeeded(phaseFlux, LOGGER);
+  public void stop() throws MuleException {
+    stopIfNeeded(phaseFlux);
   }
 
   private PhaseContext recoverPhaseContext(Object value, Throwable t) {
@@ -310,12 +308,14 @@ public class ModuleFlowProcessingPhase
   /*
    * Consumer invoked for each new execution of this processing phase.
    */
-  private Consumer<PhaseContext> onMessageReceived() {
-    return phaseContext -> {
-      fireNotification(phaseContext.messageSource, phaseContext.event, phaseContext.flowConstruct, MESSAGE_RECEIVED);
-      phaseContext.template.getNotificationFunctions().forEach(notificationFunction -> muleContext.getNotificationManager()
-          .fireNotification(notificationFunction.apply(phaseContext.event, phaseContext.messageSource)));
-    };
+  private void onMessageReceived(PhaseContext phaseContext) {
+    fireNotification(phaseContext.messageSource, phaseContext.event, phaseContext.flowConstruct, MESSAGE_RECEIVED);
+    phaseContext.template.getNotificationFunctions().forEach(
+                                                             notificationFunction -> muleContext.getNotificationManager()
+                                                                 .fireNotification(
+                                                                                   notificationFunction
+                                                                                       .apply(phaseContext.event,
+                                                                                              phaseContext.messageSource)));
   }
 
   /*

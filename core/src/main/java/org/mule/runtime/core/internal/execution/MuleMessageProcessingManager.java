@@ -7,14 +7,16 @@
 package org.mule.runtime.core.internal.execution;
 
 import static java.util.Collections.emptySet;
-import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.initialiseIfNeeded;
-import static org.slf4j.LoggerFactory.getLogger;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.startIfNeeded;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.stopIfNeeded;
 
 import org.mule.runtime.api.artifact.Registry;
-import org.mule.runtime.api.lifecycle.Disposable;
+import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
+import org.mule.runtime.api.lifecycle.Startable;
+import org.mule.runtime.api.lifecycle.Stoppable;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.internal.policy.PolicyManager;
 import org.mule.runtime.core.privileged.execution.MessageProcessContext;
@@ -29,14 +31,10 @@ import java.util.Optional;
 
 import javax.inject.Inject;
 
-import org.slf4j.Logger;
-
 /**
  * Default implementation for {@link MessageProcessingManager}.
  */
-public class MuleMessageProcessingManager implements MessageProcessingManager, Initialisable, Disposable {
-
-  private static final Logger LOGGER = getLogger(MuleMessageProcessingManager.class);
+public class MuleMessageProcessingManager implements MessageProcessingManager, Initialisable, Startable, Stoppable {
 
   private final EndProcessPhase endProcessPhase = new EndProcessPhase();
   private MuleContext muleContext;
@@ -95,9 +93,13 @@ public class MuleMessageProcessingManager implements MessageProcessingManager, I
   }
 
   @Override
-  public void dispose() {
-    disposeIfNeeded(messageProcessPhaseList, LOGGER);
-    messageProcessPhaseList.clear();
+  public void start() throws MuleException {
+    startIfNeeded(messageProcessPhaseList);
+  }
+
+  @Override
+  public void stop() throws MuleException {
+    stopIfNeeded(messageProcessPhaseList);
   }
 
   @Inject
