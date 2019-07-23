@@ -19,6 +19,7 @@ import org.mule.runtime.core.api.util.func.CheckedConsumer;
 import org.mule.runtime.core.api.util.func.CheckedFunction;
 import org.mule.runtime.core.api.util.func.CheckedPredicate;
 
+import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -178,7 +179,7 @@ public class Exceptions {
    * @return the unwrapped exception
    */
   public static Throwable unwrap(Throwable throwable) {
-    while (throwable.getClass().getName().equals(REACTIVE_EXCEPTION_CLASS_NAME)) {
+    while (throwable.getClass().getName().equals(REACTIVE_EXCEPTION_CLASS_NAME) || throwable instanceof CompletionException) {
       throwable = throwable.getCause();
     }
     return throwable;

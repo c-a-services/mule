@@ -9,6 +9,7 @@ package org.mule.runtime.core.internal.util;
 import org.mule.runtime.core.api.util.func.CheckedRunnable;
 import org.mule.runtime.core.api.util.func.CheckedSupplier;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
 
 /**
@@ -63,6 +64,20 @@ public class ConcurrencyUtils {
     } finally {
       safeUnlock(lock);
     }
+  }
+
+  /**
+   * Returns a {@link CompletableFuture} which is exceptionally completed with the given {@code t}
+   *
+   * @param throwable the exception to complete with
+   * @param <T>       the future's generic type
+   * @return an exceptionally completed {@link CompletableFuture}
+   */
+  public static <T> CompletableFuture<T> exceptionallyCompleted(Throwable throwable) {
+    CompletableFuture<T> future = new CompletableFuture<>();
+    future.completeExceptionally(throwable);
+
+    return future;
   }
 
   private ConcurrencyUtils() {}

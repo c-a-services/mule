@@ -51,7 +51,7 @@ public class CompletableInterceptorSourceCallbackAdapter extends AbstractInterce
 
   @Override
   public Function<SourcePolicySuccessResult, CompletableFuture<Void>> apply(MessageSource source,
-                                                                    Function<SourcePolicySuccessResult, CompletableFuture<Void>> next) {
+                                                                            Function<SourcePolicySuccessResult, CompletableFuture<Void>> next) {
     if (!isInterceptable(source)) {
       return next;
     }

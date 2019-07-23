@@ -11,6 +11,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -31,20 +32,18 @@ import static org.mule.runtime.core.api.functional.Either.left;
 import static org.mule.runtime.core.api.functional.Either.right;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.initialiseIfNeeded;
 import static org.mule.runtime.core.internal.exception.ErrorTypeRepositoryFactory.createDefaultErrorTypeRepository;
+import static org.mule.runtime.core.internal.util.ConcurrencyUtils.exceptionallyCompleted;
 import static org.mule.tck.junit4.matcher.EitherMatcher.leftMatches;
 import static org.mule.tck.junit4.matcher.EitherMatcher.rightMatches;
 import static org.mule.tck.junit4.matcher.EventMatcher.hasErrorType;
 import static org.mule.tck.junit4.matcher.MessagingExceptionMatcher.withEventThat;
 import static org.mule.tck.util.MuleContextUtils.mockMuleContext;
-import static reactor.core.publisher.Mono.create;
 import static reactor.core.publisher.Mono.error;
-import static reactor.core.publisher.Mono.just;
 
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.location.ComponentLocation;
 import org.mule.runtime.api.component.location.Location;
 import org.mule.runtime.api.message.ErrorType;
-import org.mule.runtime.api.util.Reference;
 import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.exception.FlowExceptionHandler;
@@ -68,6 +67,7 @@ import org.mule.tck.size.SmallTest;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -75,9 +75,6 @@ import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runners.Parameterized.Parameters;
-
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.MonoSink;
 
 @SmallTest
 public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
@@ -134,10 +131,11 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
     when(successResult.createErrorResponseParameters()).thenReturn(event -> emptyMap());
     failureResult = mock(SourcePolicyFailureResult.class);
     when(failureResult.getMessagingException()).then(invocation -> messagingException);
+    when(failureResult.getEvent()).then(invocation -> messagingException.getEvent());
     when(failureResult.getErrorResponseParameters()).thenReturn(() -> emptyMap());
     when(sourcePolicy.process(any(), any())).thenAnswer(invocation -> {
       event = invocation.getArgument(0);
-      return just(right(successResult));
+      return completedFuture(right(successResult));
     });
 
     moduleFlowProcessingPhase = new ModuleFlowProcessingPhase(policyManager);
@@ -166,8 +164,8 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
 
     when(template.getSourceMessage()).thenReturn(resultAdapter);
     when(template.getNotificationFunctions()).thenReturn(emptyList());
-    when(template.sendResponseToClient(any(), any())).thenAnswer(invocation -> Mono.empty());
-    when(template.sendFailureResponseToClient(any(), any())).thenAnswer(invocation -> Mono.empty());
+    when(template.sendResponseToClient(any(), any())).thenAnswer(invocation -> completedFuture(null));
+    when(template.sendFailureResponseToClient(any(), any())).thenAnswer(invocation -> completedFuture(null));
 
     notifier = mock(PhaseResultNotifier.class);
   }
@@ -175,18 +173,17 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
   @Test
   public void success() throws Exception {
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
-
     verifySuccess();
   }
 
   @Test
   public void successDelayedResponseCompletion() throws Exception {
-    final Reference<MonoSink> sinkReference = new Reference<>();
-    when(template.sendResponseToClient(any(), any())).thenAnswer(invocation -> create(sinkReference::set));
+    CompletableFuture<Void> delayedFuture = new CompletableFuture<>();
+    when(template.sendResponseToClient(any(), any())).thenReturn(delayedFuture);
 
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
 
-    sinkReference.get().success();
+    delayedFuture.complete(null);
     verifySuccess();
   }
 
@@ -209,7 +206,7 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
 
   @Test
   public void successResponseSendError() throws Exception {
-    when(template.sendResponseToClient(any(), any())).thenReturn(error(mockException));
+    when(template.sendResponseToClient(any(), any())).thenReturn(exceptionallyCompleted(mockException));
 
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
 
@@ -245,7 +242,7 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
   public void successResponseParameterErrorAndErrorResponseSendError() throws Exception {
     when(successResult.getResponseParameters()).thenReturn(failingParameterSupplier);
 
-    when(template.sendFailureResponseToClient(any(), any())).thenReturn(error(mockException));
+    when(template.sendFailureResponseToClient(any(), any())).thenReturn(exceptionallyCompleted(mockException));
 
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
 
@@ -279,33 +276,33 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
 
   @Test
   public void failureDelayedErrorResponseSendCompletion() throws Exception {
-    Reference<MonoSink> sinkReference = new Reference<>();
+    CompletableFuture<Void> delayed = new CompletableFuture<>();
 
     reset(template);
     when(template.getSourceMessage()).thenReturn(resultAdapter);
     when(template.getNotificationFunctions()).thenReturn(emptyList());
-    when(template.sendFailureResponseToClient(any(), any())).thenAnswer(invocation -> create(sinkReference::set));
+    when(template.sendFailureResponseToClient(any(), any())).thenReturn(delayed);
 
     configureFailingFlow(mockException);
 
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
 
-    sinkReference.get().success();
+    delayed.complete(null);
     verifyFlowError();
   }
 
   @Test
   public void failureDelayedErrorResponseSendFailure() throws Exception {
-    Reference<MonoSink> sinkReference = new Reference<>();
+    CompletableFuture<Void> delayedFuture = new CompletableFuture<>();
 
     configureFailingFlow(mockException);
-    when(template.sendFailureResponseToClient(any(), any())).thenAnswer(invocation -> create(sinkReference::set));
+    when(template.sendFailureResponseToClient(any(), any())).thenReturn(delayedFuture);
 
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
 
     verify(template, never()).afterPhaseExecution(any());
 
-    sinkReference.get().error(mockException);
+    delayedFuture.completeExceptionally(mockException);
 
     verify(template, never()).sendResponseToClient(any(), any());
     verify(template).sendFailureResponseToClient(any(), any());
@@ -334,7 +331,7 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
   @Test
   public void failureErrorResponseSendError() throws Exception {
     configureFailingFlow(mockException);
-    when(template.sendFailureResponseToClient(any(), any())).thenReturn(error(mockException));
+    when(template.sendFailureResponseToClient(any(), any())).thenReturn(exceptionallyCompleted(mockException));
 
     moduleFlowProcessingPhase.runPhase(template, context, notifier);
 
@@ -408,7 +405,7 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
   private void configureThrowingFlow(RuntimeException failure, boolean inErrorHandler) {
     when(sourcePolicy.process(any(), any())).thenAnswer(invocation -> {
       messagingException = buildFailingFlowException(invocation.getArgument(0), failure);
-      return just(left(failureResult));
+      return completedFuture(left(failureResult));
     });
   }
 

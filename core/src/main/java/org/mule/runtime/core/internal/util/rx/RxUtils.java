@@ -111,17 +111,17 @@ public class RxUtils {
     return Flux.just(event).publishOn(fromExecutorService(executor));
   }
 
-  public static <T> Supplier<FluxSink<T>> createFluxSupplier(Function<Flux<T>, Flux<T>> configurer) {
+  public static <T> Supplier<FluxSink<T>> createFluxSupplier(Function<Flux<T>, Flux<?>> configurer) {
     return () -> {
       final FluxSinkRecorder<T> sinkRef = new FluxSinkRecorder<>();
-      Flux<T> flux = configurer.apply(Flux.create(sinkRef));
+      Flux<?> flux = configurer.apply(Flux.create(sinkRef));
 
       flux.subscribe();
       return sinkRef.getFluxSink();
     };
   }
 
-  public static <T> FluxSinkSupplier<T> createRoundRobinFluxSupplier(Function<Flux<T>, Flux<T>> configurer, int size) {
+  public static <T> FluxSinkSupplier<T> createRoundRobinFluxSupplier(Function<Flux<T>, Flux<?>> configurer, int size) {
     return new RoundRobinFluxSinkSupplier<>(size, createFluxSupplier(configurer));
   }
 }
