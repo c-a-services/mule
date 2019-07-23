@@ -7,6 +7,7 @@
 package org.mule.runtime.module.extension.internal.runtime.source;
 
 import static java.util.Collections.emptyList;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.sameInstance;
@@ -16,8 +17,7 @@ import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static reactor.core.publisher.Mono.error;
-import static reactor.core.publisher.Mono.from;
+import static org.mule.runtime.core.internal.util.ConcurrencyUtils.exceptionallyCompleted;
 import static reactor.core.publisher.Mono.just;
 
 import org.mule.runtime.api.util.Reference;
@@ -36,8 +36,6 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.reactivestreams.Publisher;
-
-import reactor.core.publisher.Mono;
 
 @SmallTest
 @RunWith(MockitoJUnitRunner.class)
@@ -68,8 +66,8 @@ public class ModuleFlowProcessingTemplateTestCase extends AbstractMuleTestCase {
   @Before
   public void before() throws Exception {
     template = new ModuleFlowProcessingTemplate(message, messageProcessor, emptyList(), completionHandler);
-    when(completionHandler.onCompletion(any(), any())).thenReturn(Mono.empty());
-    when(completionHandler.onFailure(any(), any())).thenReturn(Mono.empty());
+    when(completionHandler.onCompletion(any(), any())).thenReturn(completedFuture(null));
+    when(completionHandler.onFailure(any(), any())).thenReturn(completedFuture(null));
   }
 
   @Test
@@ -92,15 +90,15 @@ public class ModuleFlowProcessingTemplateTestCase extends AbstractMuleTestCase {
 
   @Test
   public void sendResponseToClient() throws Exception {
-    from(template.sendResponseToClient(event, mockParameters)).block();
+    template.sendResponseToClient(event, mockParameters).get();
     verify(completionHandler).onCompletion(same(event), same(mockParameters));
   }
 
   @Test
   public void failedToSendResponseToClient() throws Exception {
     Reference<Throwable> exceptionReference = new Reference<>();
-    when(completionHandler.onCompletion(same(event), same(mockParameters))).thenReturn(error(runtimeException));
-    from(template.sendResponseToClient(event, mockParameters)).doOnError(exceptionReference::set).subscribe();
+    when(completionHandler.onCompletion(same(event), same(mockParameters))).thenReturn(exceptionallyCompleted(runtimeException));
+    template.sendResponseToClient(event, mockParameters).handle((v, e) -> exceptionReference.set(e)).get();
 
     verify(completionHandler, never()).onFailure(any(MessagingException.class), same(mockParameters));
     assertThat(exceptionReference.get(), equalTo(runtimeException));
@@ -108,7 +106,7 @@ public class ModuleFlowProcessingTemplateTestCase extends AbstractMuleTestCase {
 
   @Test
   public void sendFailureResponseToClient() throws Exception {
-    from(template.sendFailureResponseToClient(messagingException, mockParameters)).block();
+    template.sendFailureResponseToClient(messagingException, mockParameters).get();
     verify(completionHandler).onFailure(messagingException, mockParameters);
   }
 
@@ -116,8 +114,8 @@ public class ModuleFlowProcessingTemplateTestCase extends AbstractMuleTestCase {
   public void failedToSendFailureResponseToClient() throws Exception {
     Reference<Throwable> exceptionReference = new Reference<>();
     when(messagingException.getEvent()).thenReturn(event);
-    when(completionHandler.onFailure(messagingException, mockParameters)).thenReturn(error(runtimeException));
-    from(template.sendFailureResponseToClient(messagingException, mockParameters)).doOnError(exceptionReference::set).subscribe();
+    when(completionHandler.onFailure(messagingException, mockParameters)).thenReturn(exceptionallyCompleted(runtimeException));
+    template.sendFailureResponseToClient(messagingException, mockParameters).handle((v, e) -> exceptionReference.set(e)).get();
     assertThat(exceptionReference.get(), equalTo(runtimeException));
   }
 }

@@ -7,15 +7,14 @@
 package org.mule.runtime.module.extension.internal.runtime.source;
 
 import static java.util.Collections.emptyMap;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 
+import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.internal.exception.MessagingException;
-import org.mule.runtime.core.api.event.CoreEvent;
 
 import java.util.Map;
-
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * {@code SourceCompletionHandler} that does nothing.
@@ -25,13 +24,13 @@ import reactor.core.publisher.Mono;
 public class NullSourceCompletionHandler implements SourceCompletionHandler {
 
   @Override
-  public Publisher<Void> onCompletion(CoreEvent event, Map<String, Object> parameters) {
-    return Mono.empty();
+  public CompletableFuture<Void> onCompletion(CoreEvent event, Map<String, Object> parameters) {
+    return completedFuture(null);
   }
 
   @Override
-  public Publisher<Void> onFailure(MessagingException exception, Map<String, Object> parameters) {
-    return Mono.empty();
+  public CompletableFuture<Void> onFailure(MessagingException exception, Map<String, Object> parameters) {
+    return completedFuture(null);
   }
 
   @Override
