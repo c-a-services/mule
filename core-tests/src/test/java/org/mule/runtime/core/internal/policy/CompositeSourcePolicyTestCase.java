@@ -120,7 +120,7 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
     Either<SourcePolicyFailureResult, SourcePolicySuccessResult> sourcePolicyResult =
         from(compositeSourcePolicy.process(initialEvent, sourceParametersProcessor)).block();
     assertThat(sourcePolicyResult.isRight(), is(true));
-    assertThat(sourcePolicyResult.getRight().getResult().getMessage(), is(firstPolicyResultEvent.getMessage()));
+    assertThat(sourcePolicyResult.getRight().getEvent().getMessage(), is(firstPolicyResultEvent.getMessage()));
     verify(flowExecutionProcessor, atLeastOnce()).apply(any());
     assertThat(flowActualResultEvent.getMessage(),
                equalTo(modifiedEvent.getMessage()));
@@ -140,7 +140,7 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
     Either<SourcePolicyFailureResult, SourcePolicySuccessResult> sourcePolicyResult =
         from(compositeSourcePolicy.process(initialEvent, sourceParametersProcessor)).block();
     assertThat(sourcePolicyResult.isRight(), is(true));
-    assertThat(sourcePolicyResult.getRight().getResult().getMessage(), is(firstPolicyResultEvent.getMessage()));
+    assertThat(sourcePolicyResult.getRight().getEvent().getMessage(), is(firstPolicyResultEvent.getMessage()));
     verify(flowExecutionProcessor, atLeastOnce()).apply(any());
     assertThat(flowActualResultEvent.getMessage(),
                equalTo(modifiedEvent.getMessage()));

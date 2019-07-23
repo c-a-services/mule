@@ -129,7 +129,7 @@ public class ModuleFlowProcessingPhaseTestCase extends AbstractMuleTestCase {
     sourcePolicy = mock(SourcePolicy.class);
     when(policyManager.createSourcePolicyInstance(any(), any(), any(), any())).thenReturn(sourcePolicy);
     successResult = mock(SourcePolicySuccessResult.class);
-    when(successResult.getResult()).then(invocation -> event);
+    when(successResult.getEvent()).then(invocation -> event);
     when(successResult.getResponseParameters()).thenReturn(() -> emptyMap());
     when(successResult.createErrorResponseParameters()).thenReturn(event -> emptyMap());
     failureResult = mock(SourcePolicyFailureResult.class);

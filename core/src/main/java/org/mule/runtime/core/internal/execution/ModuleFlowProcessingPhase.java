@@ -20,6 +20,8 @@ import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Ha
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Unhandleable.FLOW_BACK_PRESSURE;
 import static org.mule.runtime.core.api.functional.Either.left;
 import static org.mule.runtime.core.api.functional.Either.right;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
+import static org.mule.runtime.core.api.rx.Exceptions.unwrap;
 import static org.mule.runtime.core.internal.event.EventQuickCopy.quickCopy;
 import static org.mule.runtime.core.internal.message.ErrorBuilder.builder;
 import static org.mule.runtime.core.internal.util.FunctionalUtils.safely;
@@ -27,11 +29,12 @@ import static org.mule.runtime.core.internal.util.InternalExceptionUtils.createE
 import static org.mule.runtime.core.internal.util.message.MessageUtils.toMessage;
 import static org.mule.runtime.core.internal.util.message.MessageUtils.toMessageCollection;
 import static org.mule.runtime.core.internal.util.rx.RxUtils.createRoundRobinFluxSupplier;
+import static org.mule.runtime.core.privileged.processor.MessageProcessors.applyWithChildContext;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processToApply;
-import static org.mule.runtime.core.privileged.processor.MessageProcessors.processWithChildContextDontComplete;
+import static org.slf4j.LoggerFactory.getLogger;
+import static reactor.core.publisher.Flux.from;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.error;
-import static reactor.core.publisher.Mono.from;
 import static reactor.core.publisher.Mono.fromFuture;
 import static reactor.core.publisher.Mono.just;
 import static reactor.core.publisher.Mono.when;
@@ -44,6 +47,7 @@ import org.mule.runtime.api.exception.DefaultMuleException;
 import org.mule.runtime.api.exception.ErrorTypeRepository;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
+import org.mule.runtime.api.lifecycle.Disposable;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.message.ErrorType;
@@ -54,6 +58,7 @@ import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.exception.NullExceptionHandler;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.processor.Processor;
+import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
 import org.mule.runtime.core.api.source.MessageSource;
 import org.mule.runtime.core.internal.construct.FlowBackPressureException;
 import org.mule.runtime.core.internal.exception.MessagingException;
@@ -64,6 +69,7 @@ import org.mule.runtime.core.internal.message.InternalEvent.Builder;
 import org.mule.runtime.core.internal.policy.PolicyManager;
 import org.mule.runtime.core.internal.policy.SourcePolicy;
 import org.mule.runtime.core.internal.policy.SourcePolicyFailureResult;
+import org.mule.runtime.core.internal.policy.SourcePolicyResult;
 import org.mule.runtime.core.internal.policy.SourcePolicySuccessResult;
 import org.mule.runtime.core.internal.processor.interceptor.CompletableInterceptorSourceCallbackAdapter;
 import org.mule.runtime.core.internal.util.MessagingExceptionResolver;
@@ -89,7 +95,7 @@ import javax.inject.Inject;
 import javax.xml.namespace.QName;
 
 import org.reactivestreams.Publisher;
-import reactor.core.publisher.Flux;
+import org.slf4j.Logger;
 import reactor.core.publisher.Mono;
 
 /**
@@ -100,8 +106,9 @@ import reactor.core.publisher.Mono;
  * This implementation will know how to process messages from extension's sources
  */
 public class ModuleFlowProcessingPhase
-    extends NotificationFiringProcessingPhase<ModuleFlowProcessingPhaseTemplate> implements Initialisable {
+    extends NotificationFiringProcessingPhase<ModuleFlowProcessingPhaseTemplate> implements Initialisable, Disposable {
 
+  private static final Logger LOGGER = getLogger(ModuleFlowProcessingPhase.class);
   private static final String PHASE_CONTEXT = "moduleProcessingPhase.phaseContext";
 
   private ErrorType sourceResponseGenerateErrorType;
@@ -117,6 +124,7 @@ public class ModuleFlowProcessingPhase
 
   @Inject
   private InterceptorManager processorInterceptorManager;
+
   private ErrorType flowBackPressureErrorType;
 
   public ModuleFlowProcessingPhase(PolicyManager policyManager) {
@@ -149,37 +157,60 @@ public class ModuleFlowProcessingPhase
 
     phaseFlux = createRoundRobinFluxSupplier(flux -> {
       flux
-          .doOnNext(onMessageReceived())
-          // Check back pressure against source dependant strategy
-          .doOnNext(phaseContext -> phaseContext.flowConstruct.checkBackpressure(phaseContext.event))
-          // Process policy and in turn flow emitting Either<SourcePolicyFailureResult,SourcePolicySuccessResult>> when
-          // complete.
-          .flatMap(phaseContext -> fromFuture(phaseContext.sourcePolicy.process(phaseContext.event, phaseContext.template)))
-          .flatMap(policyResult -> fromFuture(policyResult.reduce(policyFailure(), policySuccess())
-                   .thenAccept(ctx -> {
-                     try {
-                       ctx.phaseResultNotifier.phaseSuccessfully();
-                     } finally {
-                       ctx.responseCompletion.complete(null);
-                     }
-                   }))
-          // In case back pressure was fired, the exception will be propagated as a SourcePolicyFailureResult, wrapping inside
-          // the back pressure exception
-          ).onErrorContinue((e, v) ->  {
-            PhaseContext ctx;
-            //TODO: get ctx!
+          .flatMap(phaseContext -> {
+            onMessageReceived();
             try {
+              phaseContext.flowConstruct.checkBackpressure(phaseContext.event);
+              // Process policy and in turn flow emitting Either<SourcePolicyFailureResult,SourcePolicySuccessResult>> when
+              // complete.
+              return fromFuture(phaseContext.sourcePolicy.process(phaseContext.event, phaseContext.template));
+            } catch (Throwable e) {
+              e = unwrap(e);
               if (e instanceof FlowBackPressureException) {
-                e = mapBackPressureExceptionToPolicyFailureResult(ctx.template, ctx.event);
+                // In case back pressure was fired, the exception will be propagated as a SourcePolicyFailureResult, wrapping inside
+                // the back pressure exception
+                return just(mapBackPressureExceptionToPolicyFailureResult(e, phaseContext.template, phaseContext.event));
               }
-              onFailure(ctx, e);
-            } finally {
-              if (ctx != null) {
-                ctx.responseCompletion.complete(null);
-              }
+              return error(e);
             }
+          })
+          .flatMap(policyResult -> fromFuture(policyResult.reduce(policyFailure(), policySuccess())
+                                                  .thenAccept(ctx -> {
+                                                    try {
+                                                      ctx.phaseResultNotifier.phaseSuccessfully();
+                                                    } finally {
+                                                      ctx.responseCompletion.complete(null);
+                                                    }
+                                                  }))
+          ).onErrorContinue((e, v) -> {
+        PhaseContext ctx = recoverPhaseContext(v);
+        try {
+          onFailure(ctx, e);
+        } finally {
+          if (ctx != null) {
+            ctx.responseCompletion.complete(null);
+          }
+        }
       });
+
+      return flux;
     }, getRuntime().availableProcessors());
+  }
+
+  @Override
+  public void dispose() {
+    disposeIfNeeded(phaseFlux, LOGGER);
+  }
+
+  private PhaseContext recoverPhaseContext(Object value) {
+    if (value instanceof PhaseContext) {
+      return (PhaseContext) value;
+    } else if (value instanceof SourcePolicyResult) {
+      return PhaseContext.from(((SourcePolicyResult) value).getEvent());
+    } else {
+      //TODO: y aca que hacemos?
+      return null;
+    }
   }
 
   @Override
@@ -210,40 +241,15 @@ public class ModuleFlowProcessingPhase
                                                          event,
                                                          policy);
 
-      phaseFlux.get().next(phaseContext);
 
 
       try {
-
-
-        final PhaseContext phaseContext =
-            new PhaseContext(template, messageProcessContext, phaseResultNotifier, terminateConsumer);
-
-        just(templateEvent)
-            .doOnNext(onMessageReceived(template, messageProcessContext, flowConstruct))
-            // Check backpressure against source dependant strategy
-            .doOnNext(flowConstruct::checkBackpressure)
-            // Process policy and in turn flow emitting Either<SourcePolicyFailureResult,SourcePolicySuccessResult>> when
-            // complete.
-            .flatMap(request -> from(policy.process(request, template)))
-            // In case backpressure was fired, the exception will be propagated as a SourcePolicyFailureResult, wrapping inside
-            // the backpressure exception
-            .onErrorResume(FlowBackPressureException.class,
-                           mapBackPressureExceptionToPolicyFailureResult(template, templateEvent))
-            // Perform processing of result by sending success or error response and handle errors that occur.
-            // Returns Publisher<Void> to signal when this is complete or if it failed.
-            .flatMap(policyResult -> policyResult.reduce(policyFailure(phaseContext, flowConstruct, messageSource),
-                                                         policySuccess(phaseContext, flowConstruct, messageSource)))
-            .doOnSuccess(aVoid -> phaseResultNotifier.phaseSuccessfully())
-            .doOnError(onFailure(flowConstruct, messageSource, phaseResultNotifier, terminateConsumer))
-            // Complete EventContext via responseCompletion Mono once everything is done.
-            .doAfterTerminate(() -> responseCompletion.complete(null))
-            .subscribe();
+        phaseFlux.get().next(phaseContext);
       } catch (Exception e) {
-        from(template.sendFailureResponseToClient(new MessagingExceptionResolver(messageSource1)
-                                                      .resolve(new MessagingException(templateEvent, e), muleContext),
-                                                  template.getFailedExecutionResponseParametersFunction().apply(templateEvent)))
-            .doOnTerminate(() -> phaseResultNotifier.phaseFailure(e)).subscribe();
+        template.sendFailureResponseToClient(
+            new MessagingExceptionResolver(messageSource).resolve(new MessagingException(event, e), muleContext),
+            template.getFailedExecutionResponseParametersFunction().apply(event))
+            .whenComplete((v, e2) -> phaseResultNotifier.phaseFailure(e));
       }
     } catch (Exception t) {
       phaseResultNotifier.phaseFailure(t);
@@ -252,37 +258,35 @@ public class ModuleFlowProcessingPhase
 
   /**
    * Notifies the {@link FlowConstruct} response listenting party of the backpressure signal raised when trying to inject the
-   * event for processing into the {@link org.mule.runtime.core.api.processor.strategy.ProcessingStrategy}.
+   * event for processing into the {@link ProcessingStrategy}.
    * <p>
-   * By wrapping the thrown backpressure exception in an {@link Either} which contains the {@link SourcePolicyFailureResult}, one
-   * can consider as if the backpressure signal was fired from inside the policy + flow execution chain, and reuse all handling
+   * By wrapping the thrown back pressure exception in an {@link Either} which contains the {@link SourcePolicyFailureResult}, one
+   * can consider as if the back pressure signal was fired from inside the policy + flow execution chain, and reuse all handling
    * logic.
    *
    * @param template the processing template being used
-   * @param event    the event that caused the backpressure signal to be fired
-   * @return an exception mapper that notifies the {@link FlowConstruct} response listener of the backpressure signal
+   * @param event    the event that caused the back pressure signal to be fired
+   * @return an exception mapper that notifies the {@link FlowConstruct} response listener of the back pressure signal
    */
-  protected Function<FlowBackPressureException, Mono<? extends Either<SourcePolicyFailureResult, SourcePolicySuccessResult>>> mapBackPressureExceptionToPolicyFailureResult(
+  protected Either<SourcePolicyFailureResult, SourcePolicySuccessResult> mapBackPressureExceptionToPolicyFailureResult(
+      Throwable exception,
       ModuleFlowProcessingPhaseTemplate template,
       CoreEvent event) {
-    return exception -> {
 
-      // Build error event
-      CoreEvent errorEvent =
-          CoreEvent.builder(event)
-              .error(ErrorBuilder.builder(exception)
-                         .errorType(flowBackPressureErrorType)
-                         .build())
-              .build();
+    // Build error event
+    CoreEvent errorEvent = CoreEvent.builder(event)
+        .error(ErrorBuilder.builder(exception)
+                   .errorType(flowBackPressureErrorType)
+                   .build())
+        .build();
 
-      // Since the decision whether the event is handled by the source onError or onBackPressure callback is made in
-      // SourceAdapter by checking the ErrorType, the exception is wrapped
-      SourcePolicyFailureResult result =
-          new SourcePolicyFailureResult(new MessagingException(errorEvent, exception),
-                                        () -> template.getFailedExecutionResponseParametersFunction().apply(errorEvent));
+    // Since the decision whether the event is handled by the source onError or onBackPressure callback is made in
+    // SourceAdapter by checking the ErrorType, the exception is wrapped
+    SourcePolicyFailureResult result =
+        new SourcePolicyFailureResult(new MessagingException(errorEvent, exception),
+                                      () -> template.getFailedExecutionResponseParametersFunction().apply(errorEvent));
 
-      return just(left(result));
-    };
+    return left(result);
   }
 
   /*
@@ -302,30 +306,30 @@ public class ModuleFlowProcessingPhase
    */
   private Function<SourcePolicySuccessResult, CompletableFuture<PhaseContext>> policySuccess() {
     return successResult -> {
-      final PhaseContext ctx = PhaseContext.from(successResult.getResult());
+      final PhaseContext ctx = PhaseContext.from(successResult.getEvent());
 
-      fireNotification(ctx.messageProcessContext.getMessageSource(), successResult.getResult(),
+      fireNotification(ctx.messageProcessContext.getMessageSource(), successResult.getEvent(),
                        ctx.flowConstruct, MESSAGE_RESPONSE);
       try {
         Function<SourcePolicySuccessResult, CompletableFuture<Void>> sendResponseToClient =
-            result -> ctx.template.sendResponseToClient(result.getResult(), result.getResponseParameters().get());
+            result -> ctx.template.sendResponseToClient(result.getEvent(), result.getResponseParameters().get());
         for (CompletableInterceptorSourceCallbackAdapter interceptor : additionalInterceptors) {
           sendResponseToClient = interceptor.apply(ctx.messageSource, sendResponseToClient);
         }
 
         return sendResponseToClient.apply(successResult)
             .thenApply(v -> {
-              onTerminate(ctx.flowConstruct, ctx.messageSource, ctx.terminateConsumer, right(successResult.getResult()));
+              onTerminate(ctx.flowConstruct, ctx.messageSource, ctx.terminateConsumer, right(successResult.getEvent()));
               return ctx;
             })
             .exceptionally(e -> {
-              policySuccessError(new SourceErrorException(successResult.getResult(), sourceResponseSendErrorType, e),
+              policySuccessError(new SourceErrorException(successResult.getEvent(), sourceResponseSendErrorType, e),
                                  successResult, ctx, ctx.flowConstruct, ctx.messageSource);
               return ctx;
             });
       } catch (Exception e) {
-        return policySuccessError(new SourceErrorException(successResult.getResult(), sourceResponseGenerateErrorType, e),
-                           successResult, ctx, ctx.flowConstruct, ctx.messageSource);
+        return policySuccessError(new SourceErrorException(successResult.getEvent(), sourceResponseGenerateErrorType, e),
+                                  successResult, ctx, ctx.flowConstruct, ctx.messageSource);
       }
     };
   }
@@ -357,11 +361,12 @@ public class ModuleFlowProcessingPhase
    * and sending an error response.
    */
   private CompletableFuture<PhaseContext> policySuccessError(SourceErrorException see,
-                                                     SourcePolicySuccessResult successResult,
-                                                     PhaseContext ctx,
-                                                     FlowConstruct flowConstruct,
-                                                     MessageSource messageSource) {
+                                                             SourcePolicySuccessResult successResult,
+                                                             PhaseContext ctx,
+                                                             FlowConstruct flowConstruct,
+                                                             MessageSource messageSource) {
 
+    //TODO: Refactor this into ideally readable code, or a flux at the very least
     MessagingException messagingException =
         see.toMessagingException(flowConstruct.getMuleContext().getExceptionContextProviders(), messageSource);
 
@@ -385,7 +390,7 @@ public class ModuleFlowProcessingPhase
     CoreEvent event = messagingException.getEvent();
     try {
       return fromFuture(ctx.template
-                      .sendFailureResponseToClient(messagingException, errorParameters.apply(event)))
+                            .sendFailureResponseToClient(messagingException, errorParameters.apply(event)))
           .onErrorMap(e -> new SourceErrorException(builder(event)
                                                         .error(builder(e).errorType(sourceErrorResponseSendErrorType).build())
                                                         .build(),
@@ -400,10 +405,10 @@ public class ModuleFlowProcessingPhase
    * an error handler.
    */
   private void onFailure(PhaseContext ctx, Throwable throwable) {
-      onTerminate(ctx.flowConstruct, ctx.messageSource, ctx.terminateConsumer, left(throwable));
-      throwable = throwable instanceof SourceErrorException ? throwable.getCause() : throwable;
-      Exception failureException = throwable instanceof Exception ? (Exception) throwable : new DefaultMuleException(throwable);
-      ctx.phaseResultNotifier.phaseFailure(failureException);
+    onTerminate(ctx.flowConstruct, ctx.messageSource, ctx.terminateConsumer, left(throwable));
+    throwable = throwable instanceof SourceErrorException ? throwable.getCause() : throwable;
+    Exception failureException = throwable instanceof Exception ? (Exception) throwable : new DefaultMuleException(throwable);
+    ctx.phaseResultNotifier.phaseFailure(failureException);
   }
 
   private Consumer<Either<MessagingException, CoreEvent>> getTerminateConsumer(MessageSource messageSource,
@@ -415,8 +420,10 @@ public class ModuleFlowProcessingPhase
     }));
   }
 
-  private CoreEvent createEvent(ModuleFlowProcessingPhaseTemplate template, MessageSource source,
-                                CompletableFuture<Void> responseCompletion, FlowConstruct flowConstruct) {
+  private CoreEvent createEvent(ModuleFlowProcessingPhaseTemplate template,
+                                MessageSource source,
+                                CompletableFuture<Void> responseCompletion,
+                                FlowConstruct flowConstruct) {
 
     SourceResultAdapter adapter = template.getSourceMessage();
     Builder eventBuilder =
@@ -503,9 +510,10 @@ public class ModuleFlowProcessingPhase
 
     @Override
     public Publisher<CoreEvent> apply(Publisher<CoreEvent> publisher) {
-      return Flux.from(publisher)
-          .flatMap(p -> processWithChildContextDontComplete(p, pub -> template.routeEventAsync(pub),
-                                                            Optional.empty(), flowConstruct.getExceptionListener()));
+      return applyWithChildContext(from(publisher),
+                                   template::routeEventAsync,
+                                   Optional.empty(),
+                                   flowConstruct.getExceptionListener());
     }
 
     @Override

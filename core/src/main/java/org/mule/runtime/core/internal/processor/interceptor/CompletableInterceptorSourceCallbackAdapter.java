@@ -66,15 +66,15 @@ public class CompletableInterceptorSourceCallbackAdapter extends AbstractInterce
       Map<String, String> dslParameters = (Map<String, String>) (source).getAnnotation(ANNOTATION_PARAMETERS);
 
       SourcePolicySuccessResult interceptedBeforeResult =
-          new SourcePolicySuccessResult(doBefore(interceptor, source, dslParameters).apply((InternalEvent) result.getResult()),
+          new SourcePolicySuccessResult(doBefore(interceptor, source, dslParameters).apply((InternalEvent) result.getEvent()),
                                         result.getResponseParameters(), result.getMessageSourceResponseParametersProcessor());
 
       try {
         CompletableFuture<Void> publisher = next.apply(interceptedBeforeResult);
-        doAfter(interceptor, source, empty()).apply((InternalEvent) interceptedBeforeResult.getResult());
+        doAfter(interceptor, source, empty()).apply((InternalEvent) interceptedBeforeResult.getEvent());
         return publisher;
       } catch (Throwable t) {
-        doAfter(interceptor, source, of(t)).apply((InternalEvent) interceptedBeforeResult.getResult());
+        doAfter(interceptor, source, of(t)).apply((InternalEvent) interceptedBeforeResult.getEvent());
         CompletableFuture<Void> error = new CompletableFuture<>();
         error.completeExceptionally(t);
 

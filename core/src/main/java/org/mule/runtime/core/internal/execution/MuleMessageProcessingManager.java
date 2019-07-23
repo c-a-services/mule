@@ -7,9 +7,12 @@
 package org.mule.runtime.core.internal.execution;
 
 import static java.util.Collections.emptySet;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.initialiseIfNeeded;
+import static org.slf4j.LoggerFactory.getLogger;
 
 import org.mule.runtime.api.artifact.Registry;
+import org.mule.runtime.api.lifecycle.Disposable;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.core.api.MuleContext;
@@ -26,10 +29,14 @@ import java.util.Optional;
 
 import javax.inject.Inject;
 
+import org.slf4j.Logger;
+
 /**
  * Default implementation for {@link MessageProcessingManager}.
  */
-public class MuleMessageProcessingManager implements MessageProcessingManager, Initialisable {
+public class MuleMessageProcessingManager implements MessageProcessingManager, Initialisable, Disposable {
+
+  private static final Logger LOGGER = getLogger(MuleMessageProcessingManager.class);
 
   private final EndProcessPhase endProcessPhase = new EndProcessPhase();
   private MuleContext muleContext;
@@ -41,6 +48,7 @@ public class MuleMessageProcessingManager implements MessageProcessingManager, I
   private Registry registry;
 
   private Collection<MessageProcessPhase> registryMessageProcessPhases;
+  private List<MessageProcessPhase> messageProcessPhaseList;
 
   @Override
   public void processMessage(MessageProcessTemplate messageProcessTemplate, MessageProcessContext messageProcessContext) {
@@ -60,7 +68,8 @@ public class MuleMessageProcessingManager implements MessageProcessingManager, I
 
   @Override
   public void initialise() throws InitialisationException {
-    List<MessageProcessPhase> messageProcessPhaseList = new ArrayList<>();
+    messageProcessPhaseList = new ArrayList<>();
+
     if (registryMessageProcessPhases != null) {
       messageProcessPhaseList.addAll(registryMessageProcessPhases);
     }
@@ -83,6 +92,12 @@ public class MuleMessageProcessingManager implements MessageProcessingManager, I
     }
 
     phaseExecutionEngine = new PhaseExecutionEngine(messageProcessPhaseList, muleContext.getExceptionListener(), endProcessPhase);
+  }
+
+  @Override
+  public void dispose() {
+    disposeIfNeeded(messageProcessPhaseList, LOGGER);
+    messageProcessPhaseList.clear();
   }
 
   @Inject

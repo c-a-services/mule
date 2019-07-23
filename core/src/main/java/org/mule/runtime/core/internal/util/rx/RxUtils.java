@@ -17,7 +17,6 @@ import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.rx.FluxSinkRecorder;
 
 import java.util.concurrent.ExecutorService;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -112,18 +111,17 @@ public class RxUtils {
     return Flux.just(event).publishOn(fromExecutorService(executor));
   }
 
-  public static <T> Supplier<FluxSink<T>> createFluxSupplier(Consumer<Flux<T>> configurer) {
+  public static <T> Supplier<FluxSink<T>> createFluxSupplier(Function<Flux<T>, Flux<T>> configurer) {
     return () -> {
       final FluxSinkRecorder<T> sinkRef = new FluxSinkRecorder<>();
-      Flux<T> flux = Flux.create(sinkRef);
-      configurer.accept(flux);
+      Flux<T> flux = configurer.apply(Flux.create(sinkRef));
 
       flux.subscribe();
       return sinkRef.getFluxSink();
     };
   }
 
-  public static <T> FluxSinkSupplier<T> createRoundRobinFluxSupplier(Consumer<Flux<T>> configurer, int size) {
+  public static <T> FluxSinkSupplier<T> createRoundRobinFluxSupplier(Function<Flux<T>, Flux<T>> configurer, int size) {
     return new RoundRobinFluxSinkSupplier<>(size, createFluxSupplier(configurer));
   }
 }
