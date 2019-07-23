@@ -20,7 +20,7 @@ import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Ha
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Unhandleable.FLOW_BACK_PRESSURE;
 import static org.mule.runtime.core.api.functional.Either.left;
 import static org.mule.runtime.core.api.functional.Either.right;
-import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.stopIfNeeded;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
 import static org.mule.runtime.core.api.rx.Exceptions.unwrap;
 import static org.mule.runtime.core.internal.event.EventQuickCopy.quickCopy;
 import static org.mule.runtime.core.internal.message.ErrorBuilder.builder;
@@ -31,6 +31,7 @@ import static org.mule.runtime.core.internal.util.message.MessageUtils.toMessage
 import static org.mule.runtime.core.internal.util.rx.RxUtils.createRoundRobinFluxSupplier;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.applyWithChildContext;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processToApply;
+import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.publisher.Flux.from;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.error;
@@ -96,6 +97,7 @@ import javax.inject.Inject;
 import javax.xml.namespace.QName;
 
 import org.reactivestreams.Publisher;
+import org.slf4j.Logger;
 import reactor.core.publisher.Mono;
 
 /**
@@ -108,6 +110,7 @@ import reactor.core.publisher.Mono;
 public class ModuleFlowProcessingPhase
     extends NotificationFiringProcessingPhase<ModuleFlowProcessingPhaseTemplate> implements Initialisable, Startable, Stoppable {
 
+  private static final Logger LOGGER = getLogger(ModuleFlowProcessingPhase.class);
   private static final String PHASE_CONTEXT = "moduleProcessingPhase.phaseContext";
 
   private ErrorType sourceResponseGenerateErrorType;
@@ -200,7 +203,8 @@ public class ModuleFlowProcessingPhase
 
   @Override
   public void stop() throws MuleException {
-    stopIfNeeded(phaseFlux);
+    // yes, you read right. At stop, we need to dispose the flux as that's what stops it.
+    disposeIfNeeded(phaseFlux, LOGGER);
   }
 
   private PhaseContext recoverPhaseContext(Object value, Throwable t) {
