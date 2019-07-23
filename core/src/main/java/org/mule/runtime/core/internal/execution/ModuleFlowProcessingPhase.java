@@ -156,6 +156,9 @@ public class ModuleFlowProcessingPhase
       });
     }
 
+    Function<SourcePolicyFailureResult, CompletableFuture<PhaseContext>> onPolicyFailure = policyFailure();
+    Function<SourcePolicySuccessResult, CompletableFuture<PhaseContext>> onPolicySuccess = policySuccess();
+
     phaseFlux = createRoundRobinFluxSupplier(flux -> {
       return flux
           .flatMap(phaseContext -> {
@@ -175,14 +178,16 @@ public class ModuleFlowProcessingPhase
               return error(new EventProcessingException(phaseContext.event, e));
             }
           })
-          .flatMap(policyResult -> fromFuture(policyResult.reduce(policyFailure(), policySuccess())
-              .thenAccept(ctx -> {
-                try {
-                  ctx.phaseResultNotifier.phaseSuccessfully();
-                } finally {
-                  ctx.responseCompletion.complete(null);
-                }
-              })))
+          .flatMap(policyResult -> {
+            return fromFuture(policyResult.reduce(onPolicyFailure, onPolicySuccess)
+                .thenAccept(ctx -> {
+                  try {
+                    ctx.phaseResultNotifier.phaseSuccessfully();
+                  } finally {
+                    ctx.responseCompletion.complete(null);
+                  }
+                }));
+          })
           .onErrorContinue((e, v) -> {
             e = unwrap(e);
             PhaseContext ctx = recoverPhaseContext(v, e);
@@ -347,7 +352,7 @@ public class ModuleFlowProcessingPhase
     };
   }
 
-  /*
+  /**
    * Process failure success by attempting to send an error response to client handling the case where error response sending
    * fails or the resolution of error response parameters fails.
    */
