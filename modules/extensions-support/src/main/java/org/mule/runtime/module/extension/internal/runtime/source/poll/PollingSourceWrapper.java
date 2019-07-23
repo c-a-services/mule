@@ -9,6 +9,7 @@ package org.mule.runtime.module.extension.internal.runtime.source.poll;
 import static java.lang.String.format;
 import static java.util.Comparator.naturalOrder;
 import static java.util.Optional.ofNullable;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.api.store.ObjectStoreSettings.unmanagedPersistent;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
@@ -25,7 +26,7 @@ import static org.mule.runtime.extension.api.runtime.source.PollingSource.UPDATE
 import static org.mule.runtime.extension.api.runtime.source.PollingSource.WATERMARK_ITEM_OS_KEY;
 import static org.mule.runtime.extension.api.runtime.source.PollingSource.WATERMARK_OS_NAME_SUFFIX;
 import static org.slf4j.LoggerFactory.getLogger;
-import static reactor.core.publisher.Mono.fromRunnable;
+
 import org.mule.runtime.api.component.location.ComponentLocation;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.exception.MuleException;
@@ -55,6 +56,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
@@ -62,7 +64,6 @@ import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Named;
 
-import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 
 /**
@@ -153,17 +154,18 @@ public class PollingSourceWrapper<T, A> extends SourceWrapper<T, A> {
   }
 
   @Override
-  public Publisher<Void> onTerminate(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
+  public CompletableFuture<Void> onTerminate(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
     return releaseOnCallback(context);
   }
 
   @Override
-  public Publisher<Void> onBackPressure(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
+  public CompletableFuture<Void> onBackPressure(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
     return releaseOnCallback(context);
   }
 
-  private Publisher<Void> releaseOnCallback(SourceCallbackContext context) {
-    return fromRunnable(() -> release(context));
+  private CompletableFuture<Void> releaseOnCallback(SourceCallbackContext context) {
+    release(context);
+    return completedFuture(null);
   }
 
   private void poll(SourceCallback<T, A> sourceCallback) {

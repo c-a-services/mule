@@ -6,14 +6,13 @@
  */
 package org.mule.runtime.module.extension.internal.runtime.source;
 
-import static reactor.core.publisher.Mono.empty;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.extension.api.runtime.source.SourceCallbackContext;
 
 import java.util.Map;
-
-import org.reactivestreams.Publisher;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Null object implementation of {@link SourceCallbackExecutor}
@@ -30,7 +29,7 @@ public class NullSourceCallbackExecutor implements SourceCallbackExecutor {
    * @return {@code null}
    */
   @Override
-  public Publisher<Void> execute(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
-    return empty();
+  public CompletableFuture<Void> execute(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
+    return completedFuture(null);
   }
 }
