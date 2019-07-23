@@ -6,13 +6,11 @@
  */
 package org.mule.runtime.module.extension.internal.runtime.source;
 
-import static reactor.core.publisher.Mono.from;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.extension.api.runtime.source.SourceCallbackContext;
 
 import java.util.Map;
-
-import org.reactivestreams.Publisher;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A {@link SourceCallbackExecutor} that allows chain the execution of two
@@ -31,7 +29,7 @@ public class ComposedSourceCallbackExecutor implements SourceCallbackExecutor {
   }
 
   @Override
-  public Publisher<Void> execute(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
-    return from(first.execute(event, parameters, context)).compose(v -> then.execute(event, parameters, context));
+  public CompletableFuture<Void> execute(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
+    return first.execute(event, parameters, context).thenCompose(v -> then.execute(event, parameters, context));
   }
 }

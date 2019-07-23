@@ -12,9 +12,6 @@ import static org.mule.runtime.core.internal.util.rx.ImmediateScheduler.IMMEDIAT
 import static org.mule.runtime.module.extension.internal.ExtensionProperties.BACK_PRESSURE_ACTION_CONTEXT_PARAM;
 import static org.mule.runtime.module.extension.internal.ExtensionProperties.SOURCE_CALLBACK_CONTEXT_PARAM;
 import static org.mule.runtime.module.extension.internal.ExtensionProperties.SOURCE_COMPLETION_CALLBACK_PARAM;
-import static reactor.core.publisher.Mono.create;
-import static reactor.core.publisher.Mono.empty;
-import static reactor.core.publisher.Mono.error;
 
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.exception.MuleRuntimeException;
@@ -37,17 +34,16 @@ import org.mule.runtime.module.extension.internal.loader.java.property.SourceCal
 import org.mule.runtime.module.extension.internal.runtime.DefaultExecutionContext;
 import org.mule.runtime.module.extension.internal.runtime.execution.ReflectiveMethodComponentExecutor;
 
-import org.reactivestreams.Publisher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.ImmutableList;
-
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
+
+import com.google.common.collect.ImmutableList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of {@link SourceCallbackExecutor} which uses reflection to execute the callback through a {@link Method}
@@ -112,25 +108,26 @@ class ReflectiveSourceCallbackExecutor implements SourceCallbackExecutor {
    * {@inheritDoc}
    */
   @Override
-  public Publisher<Void> execute(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
+  public CompletableFuture<Void> execute(CoreEvent event, Map<String, Object> parameters, SourceCallbackContext context) {
+    final CompletableFuture<Void> future = new CompletableFuture<>();
     if (async) {
-      return create(sink -> {
-        final ExecutionContext<SourceModel> executionContext =
-            createExecutionContext(event, parameters, context, new ReactorSourceCompletionCallback(sink));
-        try {
-          executor.execute(executionContext);
-        } catch (Throwable t) {
-          sink.error(wrapFatal(t));
-        }
-      });
+      final ExecutionContext<SourceModel> executionContext =
+          createExecutionContext(event, parameters, context, new FutureSourceCompletionCallback(future));
+      try {
+        executor.execute(executionContext);
+      } catch (Throwable t) {
+        future.completeExceptionally(wrapFatal(t));
+      }
+    } else {
+      try {
+        executor.execute(createExecutionContext(event, parameters, context, null));
+        future.complete(null);
+      } catch (Throwable t) {
+        future.completeExceptionally(wrapFatal(t));
+      }
     }
 
-    try {
-      executor.execute(createExecutionContext(event, parameters, context, null));
-      return empty();
-    } catch (Throwable t) {
-      return error(wrapFatal(t));
-    }
+    return future;
   }
 
   private ExecutionContext<SourceModel> createExecutionContext(CoreEvent event,

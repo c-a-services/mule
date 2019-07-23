@@ -23,6 +23,7 @@ import org.mule.runtime.core.internal.execution.SourceResultAdapter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.reactivestreams.Publisher;
 
@@ -78,20 +79,20 @@ final class ModuleFlowProcessingTemplate implements ModuleFlowProcessingPhaseTem
   }
 
   @Override
-  public Publisher<Void> sendResponseToClient(CoreEvent response, Map<String, Object> parameters) {
+  public CompletableFuture<Void> sendResponseToClient(CoreEvent response, Map<String, Object> parameters) {
     return completionHandler.onCompletion(response, parameters);
   }
 
   @Override
-  public Publisher<Void> sendFailureResponseToClient(MessagingException messagingException,
-                                                     Map<String, Object> parameters) {
+  public CompletableFuture<Void> sendFailureResponseToClient(MessagingException messagingException,
+                                                             Map<String, Object> parameters) {
     return completionHandler.onFailure(messagingException, parameters);
   }
 
   @Override
   public void afterPhaseExecution(Either<MessagingException, CoreEvent> either) {
     either.apply((CheckedConsumer<MessagingException>) messagingException -> completionHandler
-        .onTerminate(left(messagingException)),
+                     .onTerminate(left(messagingException)),
                  (CheckedConsumer<CoreEvent>) event -> completionHandler.onTerminate(either));
   }
 

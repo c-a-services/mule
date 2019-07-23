@@ -131,7 +131,6 @@ public final class DefaultExecutionMediator<M extends ComponentModel> implements
   private class FutureExecutionCallbackDecorator implements ExecutorCallback {
 
     private final CompletableFuture<Object> future;
-    private final Reference<Object> valueReference = new Reference<>();
 
     private FutureExecutionCallbackDecorator(CompletableFuture<Object> future) {
       this.future = future;
@@ -139,7 +138,6 @@ public final class DefaultExecutionMediator<M extends ComponentModel> implements
 
     @Override
     public void complete(Object value) {
-      valueReference.set(value);
       future.complete(value);
     }
 

@@ -27,7 +27,6 @@ import static org.reflections.ReflectionUtils.getAllFields;
 import static org.reflections.ReflectionUtils.withAnnotation;
 import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.publisher.Mono.create;
-import static reactor.core.publisher.Mono.from;
 
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.location.ComponentLocation;
@@ -82,6 +81,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 import javax.inject.Inject;
@@ -281,12 +281,12 @@ public class SourceAdapter implements Lifecycle {
     }
 
     @Override
-    public Publisher<Void> onCompletion(CoreEvent event, Map<String, Object> parameters) {
-      return from(onSuccessExecutor.execute(event, parameters, context)).doOnSuccess(v -> commit());
+    public CompletableFuture<Void> onCompletion(CoreEvent event, Map<String, Object> parameters) {
+      return onSuccessExecutor.execute(event, parameters, context).thenAccept(v -> commit());
     }
 
     @Override
-    public Publisher<Void> onFailure(MessagingException exception, Map<String, Object> parameters) {
+    public CompletableFuture<Void> onFailure(MessagingException exception, Map<String, Object> parameters) {
       final CoreEvent event = exception.getEvent();
       final boolean isBackPressureError = event.getError()
           .map(e -> flowBackPressueErrorType.equals(e.getErrorType()))
@@ -302,15 +302,14 @@ public class SourceAdapter implements Lifecycle {
         executor = onErrorExecutor;
       }
 
-      return from(executor.execute(event, parameters, context)).doAfterTerminate(this::rollback);
+      return executor.execute(event, parameters, context).whenComplete((v, e) -> rollback());
     }
 
     @Override
     public void onTerminate(Either<MessagingException, CoreEvent> result) throws Exception {
       CoreEvent event = result.isRight() ? result.getRight() : result.getLeft().getEvent();
-      from(onTerminateExecutor.execute(event, emptyMap(), context))
-          .doAfterTerminate(() -> context.releaseConnection())
-          .subscribe();
+      onTerminateExecutor.execute(event, emptyMap(), context)
+          .whenComplete((v, e) -> context.releaseConnection());
     }
 
     private void commit() {
@@ -412,18 +411,18 @@ public class SourceAdapter implements Lifecycle {
 
     FieldSetter<Object, ConnectionProvider> setter = connectionSetter.get();
     ConfigurationInstance config = configurationInstance.orElseThrow(() -> new DefaultMuleException(createStaticMessage(
-                                                                                                                        "Message Source on root component '%s' requires a connection but it doesn't point to any configuration. Please review your "
-                                                                                                                            + "application",
-                                                                                                                        component
-                                                                                                                            .getLocation()
-                                                                                                                            .getRootContainerName())));
+        "Message Source on root component '%s' requires a connection but it doesn't point to any configuration. Please review your "
+            + "application",
+        component
+            .getLocation()
+            .getRootContainerName())));
 
     if (!config.getConnectionProvider().isPresent()) {
       throw new DefaultMuleException(createStaticMessage(format(
-                                                                "Message Source on root component '%s' requires a connection, but points to config '%s' which doesn't specify any. "
-                                                                    + "Please review your application",
-                                                                component.getLocation().getRootContainerName(),
-                                                                config.getName())));
+          "Message Source on root component '%s' requires a connection, but points to config '%s' which doesn't specify any. "
+              + "Please review your application",
+          component.getLocation().getRootContainerName(),
+          config.getName())));
     }
 
     ConnectionProvider<Object> connectionProvider = new SourceConnectionProvider(connectionManager, config);
@@ -442,12 +441,12 @@ public class SourceAdapter implements Lifecycle {
     return fetchField(Connection.class).map(field -> {
       if (!ConnectionProvider.class.equals(field.getType())) {
         throw new IllegalModelDefinitionException(format(
-                                                         "Message Source defined on class '%s' has field '%s' of type '%s' annotated with @%s. That annotation can only be "
-                                                             + "used on fields of type '%s'",
-                                                         sourceInvokationTarget.get().getClass().getName(), field.getName(),
-                                                         field.getType().getName(),
-                                                         Connection.class.getName(),
-                                                         ConnectionProvider.class.getName()));
+            "Message Source defined on class '%s' has field '%s' of type '%s' annotated with @%s. That annotation can only be "
+                + "used on fields of type '%s'",
+            sourceInvokationTarget.get().getClass().getName(), field.getName(),
+            field.getType().getName(),
+            Connection.class.getName(),
+            ConnectionProvider.class.getName()));
       }
 
       return new FieldSetter<>(field);
@@ -463,10 +462,10 @@ public class SourceAdapter implements Lifecycle {
     if (fields.size() > 1) {
       // TODO: MULE-9220 Move this to a syntax validator
       throw new IllegalModelDefinitionException(
-                                                format("Message Source defined on class '%s' has more than one field annotated with '@%s'. "
-                                                    + "Only one field in the class can bare such annotation",
-                                                       sourceInvokationTarget.get().getClass().getName(),
-                                                       annotation.getSimpleName()));
+          format("Message Source defined on class '%s' has more than one field annotated with '@%s'. "
+                     + "Only one field in the class can bare such annotation",
+                 sourceInvokationTarget.get().getClass().getName(),
+                 annotation.getSimpleName()));
     }
 
     return of(fields.iterator().next());
@@ -483,8 +482,8 @@ public class SourceAdapter implements Lifecycle {
   Optional<Publisher<Void>> getReconnectionAction(ConnectionException e) {
     if (sourceInvokationTarget.get() instanceof Reconnectable) {
       return of(
-                create(sink -> ((Reconnectable) sourceInvokationTarget.get()).reconnect(e,
-                                                                                        new ReactiveReconnectionCallback(sink))));
+          create(sink -> ((Reconnectable) sourceInvokationTarget.get()).reconnect(e,
+                                                                                  new ReactiveReconnectionCallback(sink))));
     }
 
     return empty();
@@ -514,7 +513,7 @@ public class SourceAdapter implements Lifecycle {
       object = valueResolver.resolve(context);
     } catch (MuleException e) {
       throw new MuleRuntimeException(createStaticMessage("Unable to get the " + type.getSimpleName()
-          + " value for Message Source"), e);
+                                                             + " value for Message Source"), e);
     } finally {
       if (initialiserEvent != null) {
         ((BaseEventContext) initialiserEvent.getContext()).success();
