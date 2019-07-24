@@ -16,7 +16,6 @@ import static org.mule.runtime.core.internal.event.EventQuickCopy.quickCopy;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.policy.SourcePolicyParametersTransformer;
-import org.mule.runtime.core.api.util.concurrent.FunctionalReadWriteLock;
 import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.message.InternalEvent;
 import org.mule.runtime.core.internal.util.rx.FluxSinkSupplier;
@@ -28,6 +27,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
 
 import reactor.core.publisher.FluxSink;
@@ -42,7 +44,10 @@ class CommonSourcePolicy {
 
   private final FluxSinkSupplier<CoreEvent> policySink;
   private final AtomicBoolean disposed;
-  private final FunctionalReadWriteLock readWriteLock;
+  private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+  private final Lock readLock = readWriteLock.readLock();
+  private final Lock writeLock = readWriteLock.writeLock();
+
   private final Optional<SourcePolicyParametersTransformer> sourcePolicyParametersTransformer;
 
   CommonSourcePolicy(Supplier<FluxSink<CoreEvent>> sinkFactory) {
@@ -55,32 +60,33 @@ class CommonSourcePolicy {
         new TransactionAwareFluxSinkSupplier<>(sinkFactory,
                                                new RoundRobinFluxSinkSupplier<>(getRuntime().availableProcessors(), sinkFactory));
     this.sourcePolicyParametersTransformer = sourcePolicyParametersTransformer;
-    this.readWriteLock = FunctionalReadWriteLock.readWriteLock();
     this.disposed = new AtomicBoolean(false);
   }
 
   public CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process(CoreEvent sourceEvent,
                                                                                                  MessageSourceResponseParametersProcessor respParamProcessor) {
-    return readWriteLock.withReadLock(lockReleaser -> {
-      CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> future = new CompletableFuture<>();
-      if (!disposed.get()) {
+    CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> future = new CompletableFuture<>();
 
+    if (!disposed.get()) {
+      readLock.lock();
+      try {
         policySink.get().next(quickCopy(sourceEvent, of(POLICY_SOURCE_PARAMETERS_PROCESSOR, respParamProcessor,
                                                         POLICY_SOURCE_COMPLETABLE_FUTURE, future)));
-      } else {
-
-        MessagingException me = new MessagingException(createStaticMessage("Source policy already disposed"), sourceEvent);
-
-        Supplier<Map<String, Object>> errorParameters = sourcePolicyParametersTransformer.isPresent()
-            ? (() -> sourcePolicyParametersTransformer.get().fromMessageToErrorResponseParameters(sourceEvent.getMessage()))
-            : (() -> respParamProcessor.getFailedExecutionResponseParametersFunction().apply(sourceEvent));
-
-        SourcePolicyFailureResult result = new SourcePolicyFailureResult(me, errorParameters);
-        future.complete(left(result));
+      } finally {
+        readLock.unlock();
       }
+    } else {
+      MessagingException me = new MessagingException(createStaticMessage("Source policy already disposed"), sourceEvent);
 
-      return future;
-    });
+      Supplier<Map<String, Object>> errorParameters = sourcePolicyParametersTransformer.isPresent()
+          ? (() -> sourcePolicyParametersTransformer.get().fromMessageToErrorResponseParameters(sourceEvent.getMessage()))
+          : (() -> respParamProcessor.getFailedExecutionResponseParametersFunction().apply(sourceEvent));
+
+      SourcePolicyFailureResult result = new SourcePolicyFailureResult(me, errorParameters);
+      future.complete(left(result));
+    }
+
+    return future;
   }
 
   public MessageSourceResponseParametersProcessor getResponseParamsProcessor(CoreEvent event) {
@@ -109,9 +115,12 @@ class CommonSourcePolicy {
   }
 
   public void dispose() {
-    readWriteLock.withWriteLock(() -> {
-      policySink.dispose();
+    writeLock.lock();
+    try {
       disposed.set(true);
-    });
+      policySink.dispose();
+    } finally {
+      writeLock.unlock();
+    }
   }
 }
