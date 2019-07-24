@@ -6,7 +6,6 @@
  */
 package org.mule.runtime.core.internal.execution;
 
-import static java.lang.Runtime.getRuntime;
 import static org.mule.runtime.api.metadata.MediaType.ANY;
 import static org.mule.runtime.api.notification.ConnectorMessageNotification.MESSAGE_ERROR_RESPONSE;
 import static org.mule.runtime.api.notification.ConnectorMessageNotification.MESSAGE_RECEIVED;
@@ -190,13 +189,23 @@ public class ModuleFlowProcessingPhase
               return error(new EventProcessingException(phaseContext.event, e));
             }
           })
-          .flatMap(policyResult -> fromFuture(policyResult.reduce(onPolicyFailure, onPolicySuccess).thenAccept(ctx -> {
-            try {
-              ctx.phaseResultNotifier.phaseSuccessfully();
-            } finally {
-              ctx.responseCompletion.complete(null);
-            }
-          })))
+          .flatMap(policyResult -> {
+            CompletableFuture<Void> future = policyResult.reduce(onPolicyFailure, onPolicySuccess).thenAccept(ctx -> {
+              try {
+                ctx.phaseResultNotifier.phaseSuccessfully();
+              } finally {
+                ctx.responseCompletion.complete(null);
+              }
+            });
+
+            return Mono.create(sink -> future.whenComplete((v, e) -> {
+              if (e != null) {
+                sink.error(e);
+              } else {
+                sink.success(v);
+              }
+            }));
+          })
           .onErrorContinue((e, v) -> {
             e = unwrap(e);
             PhaseContext ctx = recoverPhaseContext(v, e);
@@ -206,7 +215,8 @@ public class ModuleFlowProcessingPhase
               ctx.responseCompletion.complete(null);
             }
           });
-    }, getRuntime().availableProcessors());
+    }, Runtime.getRuntime().availableProcessors() * 2);
+    //}, 16);
   }
 
   @Override
