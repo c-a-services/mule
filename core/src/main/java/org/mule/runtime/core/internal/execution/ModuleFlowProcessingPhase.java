@@ -171,7 +171,15 @@ public class ModuleFlowProcessingPhase
               phaseContext.flowConstruct.checkBackpressure(phaseContext.event);
               // Process policy and in turn flow emitting Either<SourcePolicyFailureResult,SourcePolicySuccessResult>> when
               // complete.
-              return fromFuture(phaseContext.sourcePolicy.process(phaseContext.event, phaseContext.template));
+              CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process =
+                  phaseContext.sourcePolicy.process(phaseContext.event, phaseContext.template);
+              return Mono.create(sink -> process.whenComplete((v, e) -> {
+                if (e != null) {
+                  sink.error(e);
+                } else {
+                  sink.success(v);
+                }
+              }));
             } catch (Throwable e) {
               e = unwrap(e);
               if (e instanceof FlowBackPressureException) {
