@@ -68,12 +68,19 @@ class CommonSourcePolicy {
     CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> future = new CompletableFuture<>();
 
     if (!disposed.get()) {
+      InternalEvent dispatchEvent = quickCopy(sourceEvent, of(POLICY_SOURCE_PARAMETERS_PROCESSOR, respParamProcessor,
+                                                              POLICY_SOURCE_COMPLETABLE_FUTURE, future));
+      FluxSink<CoreEvent> sink;
       readLock.lock();
       try {
-        policySink.get().next(quickCopy(sourceEvent, of(POLICY_SOURCE_PARAMETERS_PROCESSOR, respParamProcessor,
-                                                        POLICY_SOURCE_COMPLETABLE_FUTURE, future)));
+        sink = policySink.get();
       } finally {
         readLock.unlock();
+      }
+
+      if (!disposed.get()) {
+        // this should be inside the read lock... taking it out temporarily to trouble shoot weird issue
+         sink.next(dispatchEvent);
       }
     } else {
       MessagingException me = new MessagingException(createStaticMessage("Source policy already disposed"), sourceEvent);
