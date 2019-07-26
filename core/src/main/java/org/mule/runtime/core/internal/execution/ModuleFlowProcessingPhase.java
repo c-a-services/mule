@@ -174,7 +174,13 @@ public class ModuleFlowProcessingPhase
                   phaseContext.sourcePolicy.process(phaseContext.event, phaseContext.template);
               return Mono.create(sink -> process.whenComplete((v, e) -> {
                 if (e != null) {
-                  sink.error(e);
+                  if (e instanceof FlowBackPressureException) {
+                    // In case back pressure was fired, the exception will be propagated as a SourcePolicyFailureResult, wrapping inside
+                    // the back pressure exception
+                    sink.success(mapBackPressureExceptionToPolicyFailureResult(e, phaseContext.template, phaseContext.event));
+                  } else {
+                    sink.error(e);
+                  }
                 } else {
                   sink.success(v);
                 }
@@ -215,7 +221,7 @@ public class ModuleFlowProcessingPhase
               ctx.responseCompletion.complete(null);
             }
           });
-    }, Runtime.getRuntime().availableProcessors() * 2);
+    }, Runtime.getRuntime().availableProcessors() * 1);
     //}, 16);
   }
 
