@@ -117,7 +117,8 @@ public class ModuleFlowProcessingPhase
   private ErrorType sourceErrorResponseGenerateErrorType;
   private ErrorType sourceErrorResponseSendErrorType;
   private ConfigurationComponentLocator componentLocator;
-  private FluxSinkSupplier<PhaseContext> phaseFlux;
+
+  private FluxSinkSupplier<PhaseContext> dispatchFlux;
 
   private final PolicyManager policyManager;
 
@@ -162,9 +163,9 @@ public class ModuleFlowProcessingPhase
     Function<SourcePolicyFailureResult, CompletableFuture<PhaseContext>> onPolicyFailure = policyFailure();
     Function<SourcePolicySuccessResult, CompletableFuture<PhaseContext>> onPolicySuccess = policySuccess();
 
-    phaseFlux = createRoundRobinFluxSupplier(flux -> {
+    dispatchFlux = createRoundRobinFluxSupplier(flux -> {
       return flux
-          .flatMap(phaseContext -> {
+          .doOnNext(phaseContext -> {
             onMessageReceived(phaseContext);
             try {
               phaseContext.flowConstruct.checkBackpressure(phaseContext.event);
@@ -172,45 +173,30 @@ public class ModuleFlowProcessingPhase
               // complete.
               CompletableFuture<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> process =
                   phaseContext.sourcePolicy.process(phaseContext.event, phaseContext.template);
-              return Mono.create(sink -> process.whenComplete((v, e) -> {
+
+              process.whenComplete((v, e) -> {
                 if (e != null) {
+                  e = unwrap(e);
                   if (e instanceof FlowBackPressureException) {
                     // In case back pressure was fired, the exception will be propagated as a SourcePolicyFailureResult, wrapping inside
                     // the back pressure exception
-                    sink.success(mapBackPressureExceptionToPolicyFailureResult(e, phaseContext.template, phaseContext.event));
+                    onPolicyResult(mapBackPressureExceptionToPolicyFailureResult(e, phaseContext.template, phaseContext.event));
                   } else {
-                    sink.error(e);
+                    onError(e, phaseContext);
                   }
                 } else {
-                  sink.success(v);
+                  onPolicyResult(v);
                 }
-              }));
+              });
             } catch (Throwable e) {
               e = unwrap(e);
               if (e instanceof FlowBackPressureException) {
                 // In case back pressure was fired, the exception will be propagated as a SourcePolicyFailureResult, wrapping inside
                 // the back pressure exception
-                return just(mapBackPressureExceptionToPolicyFailureResult(e, phaseContext.template, phaseContext.event));
+                onPolicyResult(mapBackPressureExceptionToPolicyFailureResult(e, phaseContext.template, phaseContext.event));
               }
-              return error(new EventProcessingException(phaseContext.event, e));
+              onError(e, phaseContext);
             }
-          })
-          .flatMap(policyResult -> {
-            CompletableFuture<Void> future = policyResult.reduce(onPolicyFailure, onPolicySuccess).thenAccept(ctx -> {
-              try {
-                ctx.phaseResultNotifier.phaseSuccessfully();
-              } finally {
-                ctx.responseCompletion.complete(null);
-              }
-            });
-
-            return Mono.create(sink -> future.whenComplete((v, e) -> {
-              if (e != null) {
-                sink.error(e);
-              } else {
-                sink.success(v);
-              }
-            }));
           })
           .onErrorContinue((e, v) -> {
             e = unwrap(e);
@@ -222,13 +208,34 @@ public class ModuleFlowProcessingPhase
             }
           });
     }, Runtime.getRuntime().availableProcessors() * 1);
-    //}, 16);
+  }
+
+  private void onError(Throwable e, PhaseContext ctx) {
+    try {
+      onFailure(ctx, e);
+    } finally {
+      ctx.responseCompletion.complete(null);
+    }
+  }
+
+  private void onPolicyResult(Either<SourcePolicyFailureResult, SourcePolicySuccessResult> policyResult) {
+    Function<SourcePolicyFailureResult, CompletableFuture<PhaseContext>> onPolicyFailure = policyFailure();
+    Function<SourcePolicySuccessResult, CompletableFuture<PhaseContext>> onPolicySuccess = policySuccess();
+
+    CompletableFuture<Void> future = policyResult.reduce(onPolicyFailure, onPolicySuccess).thenAccept(ctx -> {
+      try {
+        ctx.phaseResultNotifier.phaseSuccessfully();
+      } finally {
+        ctx.responseCompletion.complete(null);
+      }
+    });
+
   }
 
   @Override
   public void stop() throws MuleException {
     // yes, you read right. At stop, we need to dispose the flux as that's what stops it.
-    disposeIfNeeded(phaseFlux, LOGGER);
+    disposeIfNeeded(dispatchFlux, LOGGER);
   }
 
   private PhaseContext recoverPhaseContext(Object value, Throwable t) {
@@ -287,7 +294,7 @@ public class ModuleFlowProcessingPhase
         event = quickCopy(event, internalParams);
         phaseContext.event = event;
 
-        phaseFlux.get().next(phaseContext);
+        dispatchFlux.get().next(phaseContext);
       } catch (Exception e) {
         template.sendFailureResponseToClient(
                                              new MessagingExceptionResolver(messageSource)
