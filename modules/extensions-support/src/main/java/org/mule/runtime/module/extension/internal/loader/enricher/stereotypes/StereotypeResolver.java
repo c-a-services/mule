@@ -57,9 +57,9 @@ public abstract class StereotypeResolver<T extends WithAnnotations> {
     }
   }
 
-  protected static StereotypeModel getStereotype(StereotypeDefinition stereotypeDefinition,
-                                                 String namespace,
-                                                 Map<StereotypeDefinition, StereotypeModel> stereotypesCache) {
+  public static StereotypeModel getStereotype(StereotypeDefinition stereotypeDefinition,
+                                              String namespace,
+                                              Map<StereotypeDefinition, StereotypeModel> stereotypesCache) {
     return computeIfAbsent(stereotypesCache, stereotypeDefinition, definition -> {
 
       if (!isValidStereotype(stereotypeDefinition, namespace)) {

@@ -15,6 +15,9 @@ import static org.mule.runtime.extension.api.stereotype.MuleStereotypes.CONFIG;
 import static org.mule.runtime.extension.api.stereotype.MuleStereotypes.FLOW;
 import static org.mule.runtime.extension.api.stereotype.MuleStereotypes.OBJECT_STORE;
 import static org.mule.runtime.module.extension.internal.loader.enricher.stereotypes.StereotypeResolver.createCustomStereotype;
+
+import org.mule.metadata.api.model.ObjectType;
+import org.mule.metadata.java.api.annotation.ClassInformationAnnotation;
 import org.mule.runtime.api.meta.model.declaration.fluent.ExtensionDeclaration;
 import org.mule.runtime.api.meta.model.declaration.fluent.ParameterDeclaration;
 import org.mule.runtime.api.meta.model.declaration.fluent.ParameterGroupDeclaration;
@@ -25,19 +28,22 @@ import org.mule.runtime.extension.api.annotation.param.reference.FlowReference;
 import org.mule.runtime.extension.api.annotation.param.reference.ObjectStoreReference;
 import org.mule.runtime.extension.api.annotation.param.stereotype.AllowedStereotypes;
 import org.mule.runtime.extension.api.declaration.fluent.util.IdempotentDeclarationWalker;
+import org.mule.runtime.extension.api.declaration.type.annotation.StereotypeTypeAnnotation;
 import org.mule.runtime.extension.api.loader.ExtensionLoadingContext;
 import org.mule.runtime.extension.api.stereotype.StereotypeDefinition;
 import org.mule.runtime.module.extension.internal.loader.java.property.DeclaringMemberModelProperty;
 import org.mule.runtime.module.extension.internal.loader.java.property.ImplementingParameterModelProperty;
 
 import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Enriches the {@link ParameterDeclaration}s of an extension model with a {@link List} of {@link StereotypeModel} if they
- * are marked as a reference to at least some element.
+ * Enriches the {@link ParameterDeclaration}s of an extension model with a {@link List} of {@link StereotypeModel} if they are
+ * marked as a reference to at least some element.
  *
  * @since 4.0
  */
@@ -56,25 +62,31 @@ public final class ParameterAllowedStereotypesDeclarionEnricher extends Abstract
 
   private static class Enricher {
 
-    private Map<StereotypeDefinition, StereotypeModel> stereotypesCache = new HashMap<>();
+    private final Map<StereotypeDefinition, StereotypeModel> stereotypesCache = new HashMap<>();
     private String defaultNamespace;
 
     void enrich(ExtensionDeclaration extension) {
       defaultNamespace = extension.getXmlDslModel().getPrefix().toUpperCase();
+
+      Map<String, ObjectType> typesByClassName = new HashMap<>();
+      extension.getTypes()
+          .forEach(type -> type.getAnnotation(ClassInformationAnnotation.class)
+              .ifPresent(st -> typesByClassName.put(st.getClassname(), type)));
 
       new IdempotentDeclarationWalker() {
 
         @Override
         protected void onParameter(ParameterGroupDeclaration parameterGroup, ParameterDeclaration declaration) {
           declaration.getModelProperty(ImplementingParameterModelProperty.class)
-              .ifPresent(param -> declaration.setAllowedStereotypeModels(getStereotypes(param.getParameter())));
+              .ifPresent(param -> declaration.setAllowedStereotypeModels(getStereotypes(param.getParameter(), typesByClassName)));
           declaration.getModelProperty(DeclaringMemberModelProperty.class)
-              .ifPresent(field -> declaration.setAllowedStereotypeModels(getStereotypes(field.getDeclaringField())));
+              .ifPresent(field -> declaration
+                  .setAllowedStereotypeModels(getStereotypes(field.getDeclaringField(), typesByClassName)));
         }
       }.walk(extension);
     }
 
-    private List<StereotypeModel> getStereotypes(AnnotatedElement element) {
+    private List<StereotypeModel> getStereotypes(AnnotatedElement element, Map<String, ObjectType> typesByClassName) {
       ConfigReferences references = element.getAnnotation(ConfigReferences.class);
       if (references != null) {
         return stream(references.value()).map(ref -> newStereotype(ref.name(), ref.namespace())
@@ -101,9 +113,27 @@ public final class ParameterAllowedStereotypesDeclarionEnricher extends Abstract
         return stream(allowedStereotypes.value())
             .map(definition -> createCustomStereotype(definition, defaultNamespace, stereotypesCache))
             .collect(toList());
-      }
+      } else {
+        final Class<?> paramType;
+        if (element instanceof Field) {
+          paramType = ((Field) element).getType();
+        } else {
+          // (element instanceof Parameter) {
+          paramType = ((Parameter) element).getType();
+        }
 
-      return emptyList();
+        if (!paramType.isEnum()) {
+          if (!typesByClassName.containsKey(paramType.getCanonicalName())) {
+            return emptyList();
+          } else {
+            return typesByClassName.get(paramType.getCanonicalName()).getAnnotation(StereotypeTypeAnnotation.class)
+                .map(st -> st.getAllowedStereotypes())
+                .orElse(emptyList());
+          }
+        } else {
+          return emptyList();
+        }
+      }
     }
 
   }
