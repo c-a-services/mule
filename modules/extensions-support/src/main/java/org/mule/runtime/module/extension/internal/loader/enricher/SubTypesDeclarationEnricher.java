@@ -78,6 +78,9 @@ public final class SubTypesDeclarationEnricher extends AbstractAnnotatedDeclarat
                                                               .collect(toImmutableList())));
   }
 
+  /**
+   * This has to run before {@link StereotypesDeclarationEnricher}.
+   */
   @Override
   public DeclarationEnricherPhase getExecutionPhase() {
     return STRUCTURE;
