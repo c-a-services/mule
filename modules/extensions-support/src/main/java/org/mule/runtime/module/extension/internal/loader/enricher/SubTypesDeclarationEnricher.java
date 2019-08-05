@@ -78,4 +78,9 @@ public final class SubTypesDeclarationEnricher extends AbstractAnnotatedDeclarat
                                                               .collect(toImmutableList())));
   }
 
+  @Override
+  public DeclarationEnricherPhase getExecutionPhase() {
+    return STRUCTURE;
+  }
+
 }

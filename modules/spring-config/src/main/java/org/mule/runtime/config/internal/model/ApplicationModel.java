@@ -43,6 +43,7 @@ import static org.mule.runtime.internal.dsl.DslConstants.CORE_PREFIX;
 import static org.mule.runtime.internal.util.NameValidationUtil.verifyStringDoesNotContainsReservedCharacters;
 import static org.slf4j.LoggerFactory.getLogger;
 
+import org.mule.metadata.api.model.MetadataType;
 import org.mule.runtime.api.component.AbstractComponent;
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.ComponentIdentifier;
@@ -52,6 +53,8 @@ import org.mule.runtime.api.dsl.DslResolvingContext;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.meta.model.ExtensionModel;
+import org.mule.runtime.api.meta.model.config.ConfigurationModel;
+import org.mule.runtime.api.meta.model.connection.ConnectionProviderModel;
 import org.mule.runtime.api.meta.model.stereotype.HasStereotypeModel;
 import org.mule.runtime.app.declaration.api.ArtifactDeclaration;
 import org.mule.runtime.app.declaration.api.ElementDeclaration;
@@ -81,6 +84,7 @@ import org.mule.runtime.config.internal.dsl.model.config.PropertiesResolverConfi
 import org.mule.runtime.config.internal.dsl.model.config.RuntimeConfigurationException;
 import org.mule.runtime.config.internal.dsl.model.extension.xml.MacroExpansionModulesModel;
 import org.mule.runtime.config.internal.dsl.processor.ObjectTypeVisitor;
+import org.mule.runtime.config.internal.dsl.spring.DefaultValueVisitor;
 import org.mule.runtime.core.api.config.ConfigurationException;
 import org.mule.runtime.core.api.extension.MuleExtensionModelProvider;
 import org.mule.runtime.core.api.util.ClassUtils;
@@ -89,6 +93,7 @@ import org.mule.runtime.dsl.api.component.config.ComponentConfiguration;
 import org.mule.runtime.dsl.api.component.config.DefaultComponentLocation;
 import org.mule.runtime.dsl.api.xml.parser.ConfigFile;
 import org.mule.runtime.dsl.api.xml.parser.ConfigLine;
+import org.mule.runtime.module.extension.internal.runtime.resolver.ValueResolver;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -380,13 +385,15 @@ public class ApplicationModel implements ArtifactAst {
               .type(resolveComponentType(componentModel, extensionModelHelper))
               .build());
 
-      extensionModelHelper.findComponentModel(componentModel.getIdentifier())
-          .ifPresent(componentModel::setComponentModel);
-      if (!componentModel.getModel(HasStereotypeModel.class).isPresent()) {
+      if (!componentModel.getModel(ComponentModel.class).isPresent()) {
+        extensionModelHelper.findComponentModel(componentModel.getIdentifier())
+            .ifPresent(componentModel::setComponentModel);
+      }
+      if (!componentModel.getModel(ConfigurationModel.class).isPresent()) {
         extensionModelHelper.findConfigurationModel(componentModel.getIdentifier())
             .ifPresent(componentModel::setConfigurationModel);
       }
-      if (!componentModel.getModel(HasStereotypeModel.class).isPresent()) {
+      if (!componentModel.getModel(ConnectionProviderModel.class).isPresent()) {
         extensionModelHelper.findConnectionProviderModel(componentModel.getIdentifier())
             .ifPresent(componentModel::setConnectionProviderModel);
       }
@@ -613,7 +620,23 @@ public class ApplicationModel implements ArtifactAst {
         buildingDefinition.map(definition -> {
           ObjectTypeVisitor typeDefinitionVisitor = new ObjectTypeVisitor(componentModel);
           definition.getTypeDefinition().visit(typeDefinitionVisitor);
-          componentModel.setType(typeDefinitionVisitor.getType());
+
+          final Class<?> type = typeDefinitionVisitor.getType();
+          componentModel.setType(type);
+
+          if (ValueResolver.class.isAssignableFrom(type)) {
+            definition.getConstructorAttributeDefinition().get(0).accept(new DefaultValueVisitor() {
+
+              @Override
+              public void onFixedValue(Object value) {
+                if (value instanceof MetadataType) {
+                  createMetadataTypeModelAdapter((MetadataType) value)
+                      .ifPresent(componentModel::setMetadataTypeModelAdapter);
+                }
+              }
+            });
+          }
+
           return definition;
         }).orElseGet(() -> {
           String classParameter = componentModel.getParameters().get(CLASS_ATTRIBUTE);

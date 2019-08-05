@@ -229,6 +229,8 @@ public class StereotypesDeclarationEnricher implements DeclarationEnricher {
       Function<Class<? extends StereotypeDefinition>, StereotypeModel> resolver =
           def -> StereotypeResolver.createCustomStereotype(def, namespace, stereotypes);
       declaration.getTypes().forEach(type -> resolveStereotype(type, resolver));
+      declaration.getSubTypes().stream().flatMap(st -> st.getSubTypes().stream())
+          .forEach(type -> resolveStereotype(type, resolver));
     }
 
     private void resolveStereotype(ObjectType type, Function<Class<? extends StereotypeDefinition>, StereotypeModel> resolver) {
