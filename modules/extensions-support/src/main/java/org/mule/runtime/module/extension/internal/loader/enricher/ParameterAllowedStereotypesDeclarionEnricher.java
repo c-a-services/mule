@@ -22,6 +22,7 @@ import org.mule.runtime.api.meta.model.declaration.fluent.ExtensionDeclaration;
 import org.mule.runtime.api.meta.model.declaration.fluent.ParameterDeclaration;
 import org.mule.runtime.api.meta.model.declaration.fluent.ParameterGroupDeclaration;
 import org.mule.runtime.api.meta.model.stereotype.StereotypeModel;
+import org.mule.runtime.api.metadata.TypedValue;
 import org.mule.runtime.extension.api.annotation.ConfigReferences;
 import org.mule.runtime.extension.api.annotation.param.reference.ConfigReference;
 import org.mule.runtime.extension.api.annotation.param.reference.FlowReference;
@@ -37,6 +38,8 @@ import org.mule.runtime.module.extension.internal.loader.java.property.Implement
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,12 +117,23 @@ public final class ParameterAllowedStereotypesDeclarionEnricher extends Abstract
             .map(definition -> createCustomStereotype(definition, defaultNamespace, stereotypesCache))
             .collect(toList());
       } else {
-        final Class<?> paramType;
+        Class<?> paramType;
         if (element instanceof Field) {
           paramType = ((Field) element).getType();
         } else {
           // (element instanceof Parameter) {
           paramType = ((Parameter) element).getType();
+
+          final Type parameterizedType = ((Parameter) element).getParameterizedType();
+          if (TypedValue.class.isAssignableFrom(paramType)) {
+            final Type[] actualTypeArguments = ((ParameterizedType) parameterizedType).getActualTypeArguments();
+            if (actualTypeArguments[0] instanceof ParameterizedType) {
+              paramType = (Class<?>) ((ParameterizedType) actualTypeArguments[0]).getRawType();
+            } else {
+              paramType = (Class<?>) actualTypeArguments[0];
+            }
+
+          }
         }
 
         if (!paramType.isEnum()) {

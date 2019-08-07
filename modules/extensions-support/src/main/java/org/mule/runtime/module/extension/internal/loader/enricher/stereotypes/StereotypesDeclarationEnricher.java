@@ -239,10 +239,6 @@ public class StereotypesDeclarationEnricher implements DeclarationEnricher {
       BiFunction<ObjectType, Class<? extends StereotypeDefinition>, StereotypeModel> resolver =
           (type, def) -> resolveStereotype(def, type, namespace, subTypeToParent);
       declaration.getTypes().forEach(type -> resolveStereotype(type, resolver));
-      declaration.getSubTypes().stream()
-          .filter(st -> declaration.getTypes().contains(st.getBaseType()))
-          .flatMap(st -> st.getSubTypes().stream())
-          .forEach(type -> resolveStereotype(type, resolver));
     }
 
     private StereotypeModel resolveStereotype(Class<? extends StereotypeDefinition> def, ObjectType type, String namespace,
