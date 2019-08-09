@@ -6,19 +6,24 @@
  */
 package org.mule.runtime.module.extension.internal.loader.enricher;
 
+import static java.util.stream.Collectors.toMap;
 import static org.mule.runtime.extension.api.dsl.syntax.DslSyntaxUtils.supportsInlineDeclaration;
 import static org.mule.runtime.extension.api.dsl.syntax.DslSyntaxUtils.typeRequiresWrapperElement;
 import static org.mule.runtime.extension.api.loader.DeclarationEnricherPhase.POST_STRUCTURE;
+import static org.mule.runtime.extension.api.util.ExtensionMetadataTypeUtils.getId;
 import static org.mule.runtime.extension.api.util.ExtensionMetadataTypeUtils.isMap;
 import static org.mule.runtime.extension.api.util.ExtensionMetadataTypeUtils.isReferableType;
 
+import org.mule.metadata.api.annotation.TypeAnnotation;
 import org.mule.metadata.api.model.AnyType;
 import org.mule.metadata.api.model.ArrayType;
 import org.mule.metadata.api.model.MetadataType;
 import org.mule.metadata.api.model.ObjectType;
 import org.mule.metadata.api.model.StringType;
 import org.mule.metadata.api.model.UnionType;
+import org.mule.metadata.api.model.impl.DefaultObjectType;
 import org.mule.metadata.api.visitor.MetadataTypeVisitor;
+import org.mule.metadata.java.api.annotation.ClassInformationAnnotation;
 import org.mule.runtime.api.meta.model.ParameterDslConfiguration;
 import org.mule.runtime.api.meta.model.declaration.fluent.ExtensionDeclaration;
 import org.mule.runtime.api.meta.model.declaration.fluent.ParameterDeclaration;
@@ -26,14 +31,19 @@ import org.mule.runtime.api.meta.model.declaration.fluent.ParameterGroupDeclarat
 import org.mule.runtime.api.meta.model.parameter.ParameterRole;
 import org.mule.runtime.api.meta.type.TypeCatalog;
 import org.mule.runtime.extension.api.declaration.fluent.util.IdempotentDeclarationWalker;
+import org.mule.runtime.extension.api.declaration.type.annotation.ParameterDslAnnotation;
 import org.mule.runtime.extension.api.loader.DeclarationEnricher;
 import org.mule.runtime.extension.api.loader.DeclarationEnricherPhase;
 import org.mule.runtime.extension.api.loader.ExtensionLoadingContext;
 import org.mule.runtime.extension.api.property.InfrastructureParameterModelProperty;
 
+import java.util.Map;
+
+import com.google.common.base.Functions;
+
 /**
- * Enhances the declaration of the {@link ParameterDslConfiguration} taking into account
- * the type of the parameter as well as the context in which the type is being used.
+ * Enhances the declaration of the {@link ParameterDslConfiguration} taking into account the type of the parameter as well as the
+ * context in which the type is being used.
  *
  * @since 4.1.3, 4.2.0
  */
@@ -65,7 +75,32 @@ public class ParameterDslDeclarationEnricher implements DeclarationEnricher {
           ParameterDslConfiguration.Builder builder = ParameterDslConfiguration.builder();
           boolean isContent = !declaration.getRole().equals(ParameterRole.BEHAVIOUR);
           ParameterDslConfiguration dslConfiguration = declaration.getDslConfiguration();
-          declaration.getType().accept(new MetadataTypeVisitor() {
+
+          MetadataType normalizedDeclarationType = extensionDeclaration.getTypes().stream()
+              .filter(type -> getId(type).equals(getId(declaration.getType())))
+              .findFirst()
+              .map((MetadataType type) -> {
+                if (type instanceof ObjectType) {
+                  final Map<Class<? extends TypeAnnotation>, TypeAnnotation> normalizedAnnotationsByClass =
+                      type.getAnnotations().stream()
+                          .collect(toMap(ann -> ann.getClass(), Functions.identity()));
+
+                  declaration.getType().getAnnotation(ClassInformationAnnotation.class)
+                      .ifPresent(paramClassInfo -> normalizedAnnotationsByClass.put(ClassInformationAnnotation.class,
+                                                                                    paramClassInfo));
+                  declaration.getType().getAnnotation(ParameterDslAnnotation.class)
+                      .ifPresent(paramClassInfo -> normalizedAnnotationsByClass.put(ParameterDslAnnotation.class,
+                                                                                    paramClassInfo));
+                  return new DefaultObjectType(((ObjectType) type).getFields(), ((ObjectType) type).isOrdered(),
+                                               ((ObjectType) type).getOpenRestriction().orElse(null),
+                                               type.getMetadataFormat(), normalizedAnnotationsByClass);
+                } else {
+                  return type;
+                }
+              })
+              .orElse(declaration.getType());
+
+          normalizedDeclarationType.accept(new MetadataTypeVisitor() {
 
             @Override
             protected void defaultVisit(MetadataType metadataType) {
