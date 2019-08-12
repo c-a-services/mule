@@ -6,11 +6,14 @@
  */
 package org.mule.runtime.core.internal.util;
 
+import static java.util.function.Function.identity;
+
 import org.mule.runtime.core.api.util.func.CheckedRunnable;
 import org.mule.runtime.core.api.util.func.CheckedSupplier;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
+import java.util.function.Function;
 
 /**
  * Utilities for concurrency
@@ -78,6 +81,24 @@ public class ConcurrencyUtils {
     future.completeExceptionally(throwable);
 
     return future;
+  }
+
+  public static <T> CompletableFuture<T> bridge(CompletableFuture<T> subject, CompletableFuture<T> source) {
+    return bridge(subject, source, identity());
+  }
+
+  public static <T> CompletableFuture<T> bridge(CompletableFuture<T> subject,
+                                                CompletableFuture<T> source,
+                                                Function<Throwable, Throwable> errorMapper) {
+    source.whenComplete((v, e) -> {
+      if (e != null) {
+        subject.completeExceptionally(errorMapper.apply(e));
+      } else {
+        subject.complete(v);
+      }
+    });
+
+    return subject;
   }
 
   private ConcurrencyUtils() {}
