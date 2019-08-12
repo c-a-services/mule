@@ -80,7 +80,7 @@ class CommonSourcePolicy {
 
       if (!disposed.get()) {
         // this should be inside the read lock... taking it out temporarily to trouble shoot weird issue
-         sink.next(dispatchEvent);
+        sink.next(dispatchEvent);
       }
     } else {
       MessagingException me = new MessagingException(createStaticMessage("Source policy already disposed"), sourceEvent);
