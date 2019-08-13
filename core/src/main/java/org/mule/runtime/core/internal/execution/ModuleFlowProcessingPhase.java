@@ -31,7 +31,9 @@ import static org.mule.runtime.core.privileged.processor.MessageProcessors.apply
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processToApply;
 import static reactor.core.publisher.Flux.from;
 import static reactor.core.publisher.Mono.empty;
+import static reactor.core.publisher.Mono.fromFuture;
 import static reactor.core.publisher.Mono.just;
+import static reactor.core.publisher.Mono.when;
 
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.location.ComponentLocation;
@@ -171,16 +173,14 @@ public class ModuleFlowProcessingPhase
       future = onPolicySuccess.apply(phaseContext, policyResult.getRight());
     }
 
-    return future.whenComplete((ctx, e) -> {
+    return future.thenApply(ctx -> {
       try {
-        if (e == null) {
-          ctx.phaseResultNotifier.phaseSuccessfully();
-        } else {
-          handleError(phaseContext, e);
-        }
+        ctx.phaseResultNotifier.phaseSuccessfully();
       } finally {
         ctx.responseCompletion.complete(null);
       }
+
+      return ctx;
     });
   }
 
@@ -236,11 +236,10 @@ public class ModuleFlowProcessingPhase
             if (e != null) {
               handleError(phaseContext, e);
             } else {
-              onPolicyResult(phaseContext, v);
-              //.exceptionally(t -> {
-              //  onError(t, phaseContext);
-              //  return phaseContext;
-              //});
+              onPolicyResult(phaseContext, v).exceptionally(t -> {
+                onError(t, phaseContext);
+                return phaseContext;
+              });
             }
           });
         } catch (Throwable e) {
@@ -400,25 +399,17 @@ public class ModuleFlowProcessingPhase
                                                              FlowConstruct flowConstruct,
                                                              MessageSource messageSource) {
 
+    //TODO: Refactor this into ideally readable code, or a flux at the very least
     MessagingException messagingException =
         see.toMessagingException(flowConstruct.getMuleContext().getExceptionContextProviders(), messageSource);
 
-    CompletableFuture<PhaseContext> future = new CompletableFuture<>();
-
-    just(messagingException).flatMapMany(flowConstruct.getExceptionListener()).last()
-        .onErrorResume(e -> empty())
-        .doOnSuccess(event -> sendErrorResponse(messagingException, successResult.createErrorResponseParameters(), ctx)
-            .whenComplete((v, e) -> {
-              if (e == null) {
-                onTerminate(flowConstruct, messageSource, ctx.terminateConsumer, left(messagingException));
-                future.complete(ctx);
-              } else {
-                future.completeExceptionally(e);
-              }
-            }))
-        .subscribe();
-
-    return future;
+    return when(just(messagingException).flatMapMany(flowConstruct.getExceptionListener()).last()
+        .onErrorResume(e -> empty()),
+                fromFuture(sendErrorResponse(messagingException, successResult.createErrorResponseParameters(), ctx))
+                    .doOnSuccess(v -> onTerminate(flowConstruct, messageSource, ctx.terminateConsumer,
+                                                  left(messagingException))))
+                                                      .then(just(ctx))
+                                                      .toFuture();
   }
 
   /**
