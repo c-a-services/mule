@@ -53,7 +53,7 @@ public class ParallelDeploymentDirectoryWatcher extends DeploymentDirectoryWatch
     for (final String zip : zips) {
       tasks.add(() -> {
         try {
-          applicationArchiveDeployer.deployPackagedArtifact(zip, empty());
+          applicationArchiveDeployer.deployOrRedeployPackagedArtifact(zip, empty());
         } catch (Exception e) {
           // Ignore and continue
         }

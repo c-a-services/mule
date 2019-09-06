@@ -104,13 +104,15 @@ public class DomainArchiveDeployer implements ArchiveDeployer<Domain> {
   }
 
   @Override
-  public Domain deployPackagedArtifact(URI domainArchiveUri, Optional<Properties> appProperties) throws DeploymentException {
-    return domainDeployer.deployPackagedArtifact(domainArchiveUri, appProperties);
+  public Domain deployOrRedeployPackagedArtifact(URI domainArchiveUri, Optional<Properties> appProperties)
+      throws DeploymentException {
+    return domainDeployer.deployOrRedeployPackagedArtifact(domainArchiveUri, appProperties);
   }
 
   @Override
-  public Domain deployPackagedArtifact(String zip, Optional<Properties> deploymentProperties) throws DeploymentException {
-    return domainDeployer.deployPackagedArtifact(zip, deploymentProperties);
+  public Domain deployOrRedeployPackagedArtifact(String zip, Optional<Properties> deploymentProperties)
+      throws DeploymentException {
+    return domainDeployer.deployOrRedeployPackagedArtifact(zip, deploymentProperties);
   }
 
   @Override

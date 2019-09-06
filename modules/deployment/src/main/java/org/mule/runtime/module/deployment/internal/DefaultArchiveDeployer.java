@@ -367,7 +367,7 @@ public class DefaultArchiveDeployer<T extends DeployableArtifact> implements Arc
   }
 
   @Override
-  public T deployPackagedArtifact(String zip, Optional<Properties> deploymentProperties) throws DeploymentException {
+  public T deployOrRedeployPackagedArtifact(String zip, Optional<Properties> deploymentProperties) throws DeploymentException {
     URI uri;
     File artifactZip;
     try {
@@ -383,10 +383,10 @@ public class DefaultArchiveDeployer<T extends DeployableArtifact> implements Arc
   }
 
   @Override
-  public T deployPackagedArtifact(URI artifactAchivedUri, Optional<Properties> appProperties)
+  public T deployOrRedeployPackagedArtifact(URI artifactArchivedUri, Optional<Properties> appProperties)
       throws DeploymentException {
-    final String artifactName = removeEndIgnoreCase(new File(artifactAchivedUri).getName(), JAR_FILE_SUFFIX);
-    return deployOrRedeployPackagedArtifact(artifactAchivedUri, artifactName, appProperties);
+    final String artifactName = removeEndIgnoreCase(new File(artifactArchivedUri).getName(), JAR_FILE_SUFFIX);
+    return deployOrRedeployPackagedArtifact(artifactArchivedUri, artifactName, appProperties);
   }
 
   @Override
@@ -506,10 +506,10 @@ public class DefaultArchiveDeployer<T extends DeployableArtifact> implements Arc
     }
   }
 
-  private T internalDeployPackagedArtifact(URI artifactAchivedUri, Optional<Properties> appProperties)
+  private T internalDeployPackagedArtifact(URI artifactArchivedUri, Optional<Properties> appProperties)
       throws DeploymentException {
     try {
-      File artifactLocation = installArtifact(artifactAchivedUri);
+      File artifactLocation = installArtifact(artifactArchivedUri);
       T artifact;
       try {
         artifact = createArtifact(artifactLocation, appProperties);
@@ -536,7 +536,7 @@ public class DefaultArchiveDeployer<T extends DeployableArtifact> implements Arc
         throw ((DeploymentException) t);
       }
 
-      final String msg = "Failed to deploy from URI: " + artifactAchivedUri;
+      final String msg = "Failed to deploy from URI: " + artifactArchivedUri;
       throw new DeploymentException(createStaticMessage(msg), t);
     }
   }

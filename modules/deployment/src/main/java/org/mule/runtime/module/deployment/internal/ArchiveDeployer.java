@@ -32,9 +32,9 @@ public interface ArchiveDeployer<T extends Artifact> {
    */
   boolean isUpdatedZombieArtifact(String artifactName);
 
-  T deployPackagedArtifact(URI domainArchiveUrl, Optional<Properties> deploymentProperties) throws DeploymentException;
+  T deployOrRedeployPackagedArtifact(URI domainArchiveUrl, Optional<Properties> deploymentProperties) throws DeploymentException;
 
-  T deployPackagedArtifact(String zip, Optional<Properties> deploymentProperties) throws DeploymentException;
+  T deployOrRedeployPackagedArtifact(String zip, Optional<Properties> deploymentProperties) throws DeploymentException;
 
   void undeployArtifact(String artifactId);
 

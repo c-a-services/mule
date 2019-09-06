@@ -169,7 +169,7 @@ public class DeploymentDirectoryWatcher implements Runnable {
             File applicationFile = new File(appsDir, app + JAR_FILE_SUFFIX);
 
             if (applicationFile.exists() && applicationFile.isFile()) {
-              applicationArchiveDeployer.deployPackagedArtifact(app + JAR_FILE_SUFFIX, empty());
+              applicationArchiveDeployer.deployOrRedeployPackagedArtifact(app + JAR_FILE_SUFFIX, empty());
             } else {
               if (applicationArchiveDeployer.isUpdatedZombieArtifact(app)) {
                 applicationArchiveDeployer.deployExplodedArtifact(app, empty());
@@ -238,7 +238,7 @@ public class DeploymentDirectoryWatcher implements Runnable {
   protected void deployPackedApps(String[] zips) {
     for (String zip : zips) {
       try {
-        applicationArchiveDeployer.deployPackagedArtifact(zip, empty());
+        applicationArchiveDeployer.deployOrRedeployPackagedArtifact(zip, empty());
       } catch (Exception e) {
         // Ignore and continue
       }
@@ -423,7 +423,7 @@ public class DeploymentDirectoryWatcher implements Runnable {
   private void deployPackedDomains(String[] zips) {
     for (String zip : zips) {
       try {
-        domainArchiveDeployer.deployPackagedArtifact(zip, empty());
+        domainArchiveDeployer.deployOrRedeployPackagedArtifact(zip, empty());
       } catch (Exception e) {
         // Ignore and continue
       }

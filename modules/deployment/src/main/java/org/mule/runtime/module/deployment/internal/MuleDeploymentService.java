@@ -234,6 +234,15 @@ public class MuleDeploymentService implements DeploymentService {
     redeploy(artifactName, ofNullable(appProperties));
   }
 
+  @Override
+  public void redeploy(URI archiveUri, Properties appProperties) throws IOException {
+    deployTemplateMethod(archiveUri, ofNullable(appProperties), getAppsFolder(), applicationDeployer);
+  }
+
+  @Override
+  public void redeploy(URI archiveUri) throws IOException {
+    redeploy(archiveUri, null);
+  }
 
   @Override
   public void undeployDomain(String domainName) {
@@ -329,7 +338,7 @@ public class MuleDeploymentService implements DeploymentService {
         File artifactLocation = toFile(artifactArchiveUri.toURL());
         String fileName = artifactLocation.getName();
         if (fileName.endsWith(".jar")) {
-          archiveDeployer.deployPackagedArtifact(artifactArchiveUri, deploymentProperties);
+          archiveDeployer.deployOrRedeployPackagedArtifact(artifactArchiveUri, deploymentProperties);
         } else {
           if (!artifactLocation.getParent().equals(artifactDeploymentFolder)) {
             try {

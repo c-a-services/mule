@@ -196,7 +196,7 @@ public class DomainBundleArchiveDeployer {
     deployedApps.add(applicationName);
 
     try {
-      applicationDeployer.deployPackagedArtifact(new File(applicationsFolder, applicationArtifact).toURI(), empty());
+      applicationDeployer.deployOrRedeployPackagedArtifact(new File(applicationsFolder, applicationArtifact).toURI(), empty());
       applicationDeploymentListener.onRedeploymentSuccess(applicationName);
     } catch (RuntimeException e) {
       if (isRedeploy) {
@@ -214,7 +214,7 @@ public class DomainBundleArchiveDeployer {
       unzip(domainFile, domain.getLocation());
     }
 
-    domainDeployer.deployPackagedArtifact(domainFile.toURI(), empty());
+    domainDeployer.deployOrRedeployPackagedArtifact(domainFile.toURI(), empty());
   }
 
   private File getDomainFile(File tempFolder) {

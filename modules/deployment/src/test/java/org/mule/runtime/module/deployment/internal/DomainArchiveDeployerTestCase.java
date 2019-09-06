@@ -93,24 +93,24 @@ public class DomainArchiveDeployerTestCase extends AbstractMuleTestCase {
 
   @Test
   public void returnNullIfDeploymentReturnsNull() {
-    when(mockDomainDeployer.deployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(null);
+    when(mockDomainDeployer.deployOrRedeployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(null);
     DomainArchiveDeployer domainArchiveDeployer =
         new DomainArchiveDeployer(mockDomainDeployer, mockApplicationDeployer, mockDeploymentService);
-    assertThat(domainArchiveDeployer.deployPackagedArtifact("someZipFile", empty()), nullValue());
+    assertThat(domainArchiveDeployer.deployOrRedeployPackagedArtifact("someZipFile", empty()), nullValue());
   }
 
   @Test
   public void doNotFailIfNoAppsFolderPresent() throws Exception {
-    when(mockDomainDeployer.deployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(mockDomain);
+    when(mockDomainDeployer.deployOrRedeployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(mockDomain);
     DomainArchiveDeployer domainArchiveDeployer =
         new DomainArchiveDeployer(mockDomainDeployer, mockApplicationDeployer, mockDeploymentService);
-    assertThat(domainArchiveDeployer.deployPackagedArtifact(DOMAIN_ZIP_PATH, empty()), is(mockDomain));
+    assertThat(domainArchiveDeployer.deployOrRedeployPackagedArtifact(DOMAIN_ZIP_PATH, empty()), is(mockDomain));
   }
 
   @Test
   public void undeployDomainWithNoApps() throws Exception {
     when(mockDeploymentService.findDomain(DOMAIN_NAME)).thenReturn(mockDomain);
-    when(mockDomainDeployer.deployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(mockDomain);
+    when(mockDomainDeployer.deployOrRedeployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(mockDomain);
     when(mockDeploymentService.findDomainApplications(DOMAIN_NAME)).thenReturn(Arrays.asList(new Application[0]));
     DomainArchiveDeployer domainArchiveDeployer =
         new DomainArchiveDeployer(mockDomainDeployer, mockApplicationDeployer, mockDeploymentService);
@@ -121,7 +121,7 @@ public class DomainArchiveDeployerTestCase extends AbstractMuleTestCase {
   @Test
   public void undeployDomainApps() throws Exception {
     when(mockDeploymentService.findDomain(DOMAIN_NAME)).thenReturn(mockDomain);
-    when(mockDomainDeployer.deployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(mockDomain);
+    when(mockDomainDeployer.deployOrRedeployPackagedArtifact(DOMAIN_ZIP_PATH, empty())).thenReturn(mockDomain);
     when(mockDeploymentService.findDomainApplications(DOMAIN_NAME))
         .thenReturn(Arrays.asList(new Application[] {mockApplication1, mockApplication2}));
     DomainArchiveDeployer domainArchiveDeployer =
