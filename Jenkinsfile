@@ -17,7 +17,7 @@ Map pipelineParams = [upstreamProjects                   : UPSTREAM_PROJECTS_LIS
                       enableNexusIqStage                 : false,
                       enableSlackNotifications           : false,
                       enableSlackFailedTestsNotifications: false,
-                      enableEmailNotifications           : false,
+                      enableEmailNotifications           : false
 ]
 
 runtimeProjectsBuild(pipelineParams)
