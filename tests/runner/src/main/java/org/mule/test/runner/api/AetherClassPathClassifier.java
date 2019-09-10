@@ -584,7 +584,7 @@ public class AetherClassPathClassifier implements ClassPathClassifier {
 
 
       for (ArtifactClassificationNode pluginClassifiedNode : resolvedPluginsClassified) {
-        if (!toFile(pluginClassifiedNode.getUrls().get(0)).isDirectory()) {
+        if (toFile(pluginClassifiedNode.getUrls().get(0)).isDirectory()) {
           List<URL> urls =
               generateExtensionMetadata(pluginClassifiedNode.getArtifact(), context, extensionPluginMetadataGenerator,
                                         pluginClassifiedNode.getUrls(), rootArtifactRemoteRepositories);
