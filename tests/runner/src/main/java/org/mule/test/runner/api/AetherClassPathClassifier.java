@@ -32,12 +32,11 @@ import static org.mule.runtime.api.util.Preconditions.checkNotNull;
 import static org.mule.test.runner.api.ArtifactClassificationType.APPLICATION;
 import static org.mule.test.runner.api.ArtifactClassificationType.MODULE;
 import static org.mule.test.runner.api.ArtifactClassificationType.PLUGIN;
+
 import org.mule.runtime.api.util.Reference;
 import org.mule.runtime.extension.api.annotation.Extension;
 import org.mule.test.runner.classification.PatternExclusionsDependencyFilter;
 import org.mule.test.runner.classification.PatternInclusionsDependencyFilter;
-
-import com.google.common.collect.Lists;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -57,6 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.DefaultArtifact;
@@ -584,9 +584,12 @@ public class AetherClassPathClassifier implements ClassPathClassifier {
 
 
       for (ArtifactClassificationNode pluginClassifiedNode : resolvedPluginsClassified) {
-        List<URL> urls = generateExtensionMetadata(pluginClassifiedNode.getArtifact(), context, extensionPluginMetadataGenerator,
-                                                   pluginClassifiedNode.getUrls(), rootArtifactRemoteRepositories);
-        pluginClassifiedNode.setUrls(urls);
+        if (!toFile(pluginClassifiedNode.getUrls().get(0)).isDirectory()) {
+          List<URL> urls =
+              generateExtensionMetadata(pluginClassifiedNode.getArtifact(), context, extensionPluginMetadataGenerator,
+                                        pluginClassifiedNode.getUrls(), rootArtifactRemoteRepositories);
+          pluginClassifiedNode.setUrls(urls);
+        }
       }
     }
     return toPluginUrlClassification(resolvedPluginsClassified);
