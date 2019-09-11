@@ -26,7 +26,7 @@ Map pipelineParams = ["upstreamProjects"                         : UPSTREAM_PROJ
                       "enableMavenTestStage"                     : true,
                       "enableAllureTestReportStage"              : false,
                       "enableMavenDeployStage"                   : false,
-                      "enableSonarQubeStage"                     : false,
+                      "enableSonarQubeStage"                     : true,
                       "enableNexusIqStage"                       : false,
                       "enableSlackNotifications"                 : false,
                       "enableSlackFailedTestsNotifications"      : false,
