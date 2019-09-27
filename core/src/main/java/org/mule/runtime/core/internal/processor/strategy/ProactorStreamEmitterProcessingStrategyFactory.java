@@ -18,6 +18,7 @@ import static reactor.core.publisher.Flux.from;
 import static reactor.core.publisher.FluxSink.OverflowStrategy.BUFFER;
 import static reactor.core.publisher.Mono.subscriberContext;
 import static reactor.core.scheduler.Schedulers.fromExecutorService;
+
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.scheduler.Scheduler;
 import org.mule.runtime.api.scheduler.SchedulerService;
@@ -38,7 +39,6 @@ import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.function.IntUnaryOperator;
 import java.util.function.Supplier;
 
@@ -48,9 +48,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * Creates {@link AsyncProcessingStrategyFactory} instance that implements the proactor pattern by de-multiplexing incoming events
- * onto a multiple emitter using the {@link SchedulerService#cpuLightScheduler()} to process these events from each emitter. In
- * contrast to the {@link AbstractStreamProcessingStrategyFactory} the proactor pattern treats
+ * Creates {@link AsyncProcessingStrategyFactory} instance that implements the proactor pattern by
+ * de-multiplexing incoming events onto a multiple emitter using the {@link SchedulerService#cpuLightScheduler()} to process these
+ * events from each emitter. In contrast to the {@link AbstractStreamProcessingStrategyFactory} the proactor pattern treats
  * {@link ProcessingType#CPU_INTENSIVE} and {@link ProcessingType#BLOCKING} processors differently and schedules there execution
  * on dedicated {@link SchedulerService#cpuIntensiveScheduler()} and {@link SchedulerService#ioScheduler()} ()} schedulers.
  * <p/>
@@ -125,7 +125,7 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
     public Sink createSink(FlowConstruct flowConstruct, ReactiveProcessor function) {
       final long shutdownTimeout = flowConstruct.getMuleContext().getConfiguration().getShutdownTimeout();
       final int sinksCount = maxConcurrency < CORES ? maxConcurrency : CORES;
-      List<ReactorSink<CoreEvent>> sinks = new ArrayList<>();
+      List<AbstractProcessingStrategy.ReactorSink<CoreEvent>> sinks = new ArrayList<>();
 
       for (int i = 0; i < sinksCount; i++) {
         Latch completionLatch = new Latch();
@@ -138,11 +138,11 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
           throw resolveSubscriptionErrorCause(failedSubscriptionCause);
         }
 
-        ReactorSink<CoreEvent> sink =
-            new DefaultReactorSink<>(processor.sink(BUFFER),
-                                     () -> awaitSubscribersCompletion(flowConstruct, shutdownTimeout, completionLatch,
-                                                                      currentTimeMillis()),
-                                     createOnEventConsumer(), getBufferQueueSize());
+        AbstractProcessingStrategy.ReactorSink<CoreEvent> sink =
+            new AbstractProcessingStrategy.DefaultReactorSink<>(processor.sink(BUFFER),
+                                                                () -> awaitSubscribersCompletion(flowConstruct, shutdownTimeout, completionLatch,
+                                                                                                 currentTimeMillis()),
+                                                                createOnEventConsumer(), getBufferQueueSize());
         sinks.add(sink);
       }
 
