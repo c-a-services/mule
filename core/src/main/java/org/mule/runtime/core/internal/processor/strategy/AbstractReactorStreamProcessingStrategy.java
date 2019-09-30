@@ -31,15 +31,17 @@ import java.util.function.Supplier;
 abstract class AbstractReactorStreamProcessingStrategy extends AbstractStreamProcessingStrategy implements Startable, Stoppable {
 
   private final Supplier<Scheduler> cpuLightSchedulerSupplier;
-  private Scheduler cpuLightScheduler;
   private final int parallelism;
-
   private final AtomicInteger inFlightEvents = new AtomicInteger();
   private final BiConsumer<CoreEvent, Throwable> inFlightDecrementCallback = (e, t) -> inFlightEvents.decrementAndGet();
 
+  private Scheduler cpuLightScheduler;
+
   AbstractReactorStreamProcessingStrategy(int subscribers,
-                                          Supplier<Scheduler> cpuLightSchedulerSupplier, int parallelism,
-                                          int maxConcurrency, boolean maxConcurrencyEagerCheck) {
+                                          Supplier<Scheduler> cpuLightSchedulerSupplier,
+                                          int parallelism,
+                                          int maxConcurrency,
+                                          boolean maxConcurrencyEagerCheck) {
     super(subscribers, maxConcurrency, maxConcurrencyEagerCheck);
     this.cpuLightSchedulerSupplier = cpuLightSchedulerSupplier;
     this.parallelism = parallelism;

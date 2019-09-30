@@ -21,11 +21,15 @@ import org.mule.runtime.core.internal.util.rx.ConditionalExecutorServiceDecorato
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class TransactionAwareStreamEmitterProcessingStrategyDecorator extends StreamEmitterProcessingStrategyDecorator {
 
   public TransactionAwareStreamEmitterProcessingStrategyDecorator(StreamEmitterProcessingStrategy delegate) {
     super(delegate);
+    Function<ScheduledExecutorService, ScheduledExecutorService> delegateDecorator = delegate.getSchedulerDecorator();
+    delegate.setSchedulerDecorator(scheduler -> new ConditionalExecutorServiceDecorator(delegateDecorator.apply(scheduler),
+                                                                                        currentScheduler -> isTransactionActive()));
   }
 
   @Override
@@ -58,14 +62,9 @@ public class TransactionAwareStreamEmitterProcessingStrategyDecorator extends St
   }
 
   @Override
-  public ScheduledExecutorService decorateScheduler(ScheduledExecutorService scheduler) {
-    return new ConditionalExecutorServiceDecorator(delegate.decorateScheduler(scheduler),
-                                                   currentScheduler -> isTransactionActive());
-  }
-
-  @Override
   public ReactiveProcessor onPipeline(ReactiveProcessor pipeline) {
-    return !LAZY_TX_CHECK && isTransactionActive() ? BLOCKING_PROCESSING_STRATEGY_INSTANCE.onPipeline(pipeline)
+    return !LAZY_TX_CHECK && isTransactionActive()
+        ? BLOCKING_PROCESSING_STRATEGY_INSTANCE.onPipeline(pipeline)
         : delegate.onPipeline(pipeline);
   }
 

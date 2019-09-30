@@ -6,6 +6,7 @@
  */
 package org.mule.runtime.core.internal.processor.strategy;
 
+import static java.util.function.Function.identity;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.core.api.construct.BackPressureReason.EVENTS_ACCUMULATED;
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Unhandleable.OVERLOAD;
@@ -28,6 +29,7 @@ import org.mule.runtime.core.privileged.event.BaseEventContext;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import reactor.core.publisher.FluxSink;
 
@@ -37,10 +39,11 @@ import reactor.core.publisher.FluxSink;
 public abstract class AbstractProcessingStrategy implements ProcessingStrategy {
 
   public static final String TRANSACTIONAL_ERROR_MESSAGE = "Unable to process a transactional flow asynchronously";
-
   public static final String PROCESSOR_SCHEDULER_CONTEXT_KEY = "mule.nb.processorScheduler";
 
   protected static final long SCHEDULER_BUSY_RETRY_INTERVAL_MS = 2;
+
+  private Function<ScheduledExecutorService, ScheduledExecutorService> schedulerDecorator = identity();
 
   @Override
   public Sink createSink(FlowConstruct flowConstruct, ReactiveProcessor pipeline) {
@@ -57,7 +60,15 @@ public abstract class AbstractProcessingStrategy implements ProcessingStrategy {
   }
 
   protected ScheduledExecutorService decorateScheduler(ScheduledExecutorService scheduler) {
-    return scheduler;
+    return schedulerDecorator.apply(scheduler);
+  }
+
+  protected Function<ScheduledExecutorService, ScheduledExecutorService> getSchedulerDecorator() {
+    return schedulerDecorator;
+  }
+
+  protected void setSchedulerDecorator(Function<ScheduledExecutorService, ScheduledExecutorService> schedulerDecorator) {
+    this.schedulerDecorator = schedulerDecorator;
   }
 
   /**
