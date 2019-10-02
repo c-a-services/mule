@@ -27,6 +27,8 @@ import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.IntUnaryOperator;
 import java.util.function.Supplier;
 
@@ -54,6 +56,8 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
 
   static class StreamEmitterProcessingStrategy extends AbstractReactorStreamProcessingStrategy {
 
+    private static final String NO_SUBSCRIPTIONS_ACTIVE_FOR_PROCESSOR = "No subscriptions active for processor.";
+
     private final int bufferSize;
 
     public StreamEmitterProcessingStrategy(int bufferSize,
@@ -75,10 +79,12 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
       for (int i = 0; i < sinksCount; i++) {
         Latch completionLatch = new Latch();
         EmitterProcessor<CoreEvent> processor = EmitterProcessor.create(getBufferQueueSize());
-        processor.transform(function).subscribe(null, e -> completionLatch.release(), () -> completionLatch.release());
+        AtomicReference<Throwable> failedSubscriptionCause = new AtomicReference<>();
+        processor.transform(function).subscribe(null, getThrowableConsumer(completionLatch, failedSubscriptionCause),
+                                                () -> completionLatch.release());
 
         if (!processor.hasDownstreams()) {
-          throw new MuleRuntimeException(createStaticMessage("No subscriptions active for processor."));
+          throw resolveSubscriptionErrorCause(failedSubscriptionCause);
         }
 
         ReactorSink<CoreEvent> sink =
@@ -92,6 +98,24 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
       return new RoundRobinReactorSink<>(sinks);
     }
 
+    protected MuleRuntimeException resolveSubscriptionErrorCause(AtomicReference<Throwable> failedSubscriptionCause) {
+      MuleRuntimeException exceptionToThrow;
+      if (failedSubscriptionCause.get() != null) {
+        exceptionToThrow = new MuleRuntimeException(createStaticMessage(NO_SUBSCRIPTIONS_ACTIVE_FOR_PROCESSOR),
+                                                    failedSubscriptionCause.get());
+      } else {
+        exceptionToThrow = new MuleRuntimeException(createStaticMessage(NO_SUBSCRIPTIONS_ACTIVE_FOR_PROCESSOR));
+      }
+      return exceptionToThrow;
+    }
+
+    protected Consumer<Throwable> getThrowableConsumer(Latch completionLatch,
+                                                       AtomicReference<Throwable> failedSubscriptionCause) {
+      return e -> {
+        failedSubscriptionCause.set(e);
+        completionLatch.release();
+      };
+    }
 
     @Override
     public ReactiveProcessor onPipeline(ReactiveProcessor pipeline) {
