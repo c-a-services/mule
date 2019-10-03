@@ -26,6 +26,7 @@ import static reactor.core.scheduler.Schedulers.fromExecutorService;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.scheduler.Scheduler;
 import org.mule.runtime.api.scheduler.SchedulerService;
+import org.mule.runtime.api.util.LazyValue;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.api.construct.BackPressureReason;
 import org.mule.runtime.core.api.event.CoreEvent;
@@ -65,9 +66,12 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
 
   @Override
   public ProcessingStrategy create(MuleContext muleContext, String schedulersNamePrefix) {
+    Supplier<Scheduler> cpuLightSchedulerSupplier =
+        new LazyValue<>(getCpuLightSchedulerSupplier(muleContext, schedulersNamePrefix));
     return new ProactorStreamEmitterProcessingStrategy(getBufferSize(),
                                                        getSubscriberCount(),
-                                                       getCpuLightSchedulerSupplier(muleContext, schedulersNamePrefix),
+                                                       cpuLightSchedulerSupplier,
+                                                       cpuLightSchedulerSupplier,
                                                        () -> muleContext.getSchedulerService()
                                                            .ioScheduler(muleContext.getSchedulerBaseConfig()
                                                                .withName(
@@ -120,6 +124,7 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
 
     public ProactorStreamEmitterProcessingStrategy(int bufferSize,
                                                    int subscriberCount,
+                                                   Supplier<Scheduler> flowDispatchSchedulerSupplier,
                                                    Supplier<Scheduler> cpuLightSchedulerSupplier,
                                                    Supplier<Scheduler> blockingSchedulerSupplier,
                                                    Supplier<Scheduler> cpuIntensiveSchedulerSupplier,
@@ -127,7 +132,8 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
                                                    int maxConcurrency,
                                                    boolean maxConcurrencyEagerCheck,
                                                    boolean isThreadLoggingEnabled) {
-      super(bufferSize, subscriberCount, cpuLightSchedulerSupplier, parallelism, maxConcurrency, maxConcurrencyEagerCheck);
+      super(bufferSize, subscriberCount, flowDispatchSchedulerSupplier, cpuLightSchedulerSupplier, parallelism, maxConcurrency,
+            maxConcurrencyEagerCheck);
       this.blockingSchedulerSupplier = blockingSchedulerSupplier;
       this.cpuIntensiveSchedulerSupplier = cpuIntensiveSchedulerSupplier;
       this.isThreadLoggingEnabled = isThreadLoggingEnabled;

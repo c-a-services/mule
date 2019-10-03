@@ -26,7 +26,7 @@ public abstract class StreamEmitterProcessingStrategyDecorator extends StreamEmi
   protected final StreamEmitterProcessingStrategy delegate;
 
   public StreamEmitterProcessingStrategyDecorator(StreamEmitterProcessingStrategy delegate) {
-    super(1, 1, () -> null, 1, 1, false);
+    super(1, 1, () -> null, () -> null, 1, 1, false);
     this.delegate = delegate;
   }
 

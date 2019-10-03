@@ -9,10 +9,12 @@ package org.mule.runtime.core.internal.processor.strategy;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.Thread.currentThread;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
+import static org.mule.runtime.core.api.processor.ReactiveProcessor.ProcessingType.CPU_LITE;
 import static reactor.core.publisher.Flux.from;
 import static reactor.core.publisher.FluxSink.OverflowStrategy.BUFFER;
 import static reactor.core.scheduler.Schedulers.fromExecutorService;
 
+import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.scheduler.Scheduler;
 import org.mule.runtime.api.util.concurrent.Latch;
@@ -40,12 +42,25 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
   public ProcessingStrategy create(MuleContext muleContext, String schedulersNamePrefix) {
     return new StreamEmitterProcessingStrategy(getBufferSize(),
                                                getSubscriberCount(),
+                                               getFlowDispatchSchedulerSupplier(muleContext, schedulersNamePrefix),
                                                getCpuLightSchedulerSupplier(
                                                                             muleContext,
                                                                             schedulersNamePrefix),
                                                resolveParallelism(),
                                                getMaxConcurrency(),
                                                isMaxConcurrencyEagerCheck());
+  }
+
+  protected Supplier<Scheduler> getCpuLightSchedulerSupplier(MuleContext muleContext, String schedulersNamePrefix) {
+    return () -> muleContext.getSchedulerService()
+        .cpuLightScheduler(muleContext.getSchedulerBaseConfig()
+            .withName(schedulersNamePrefix + "." + CPU_LITE.name()));
+  }
+
+  private Supplier<Scheduler> getFlowDispatchSchedulerSupplier(MuleContext muleContext, String schedulersNamePrefix) {
+    return () -> muleContext.getSchedulerService().cpuLightScheduler(muleContext.getSchedulerBaseConfig()
+        .withName(schedulersNamePrefix + ".dispatch")
+        .withMaxConcurrentTasks(2 * Runtime.getRuntime().availableProcessors()));
   }
 
   @Override
@@ -59,15 +74,26 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
     private static final String NO_SUBSCRIPTIONS_ACTIVE_FOR_PROCESSOR = "No subscriptions active for processor.";
 
     private final int bufferSize;
+    private final Supplier<Scheduler> flowDispatchSchedulerSupplier;
+
+    private Scheduler flowDispatchScheduler;
 
     public StreamEmitterProcessingStrategy(int bufferSize,
                                            int subscribers,
+                                           Supplier<Scheduler> flowDispatchSchedulerSupplier,
                                            Supplier<Scheduler> cpuLightSchedulerSupplier,
                                            int parallelism,
                                            int maxConcurrency,
                                            boolean maxConcurrencyEagerCheck) {
       super(subscribers, cpuLightSchedulerSupplier, parallelism, maxConcurrency, maxConcurrencyEagerCheck);
       this.bufferSize = bufferSize;
+      this.flowDispatchSchedulerSupplier = flowDispatchSchedulerSupplier;
+    }
+
+    @Override
+    public void start() throws MuleException {
+      super.start();
+      flowDispatchScheduler = flowDispatchSchedulerSupplier.get();
     }
 
     @Override
@@ -119,15 +145,14 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
 
     @Override
     public ReactiveProcessor onPipeline(ReactiveProcessor pipeline) {
-      reactor.core.scheduler.Scheduler scheduler = fromExecutorService(decorateScheduler(getCpuLightScheduler()));
+      reactor.core.scheduler.Scheduler scheduler = fromExecutorService(decorateScheduler(getFlowDispatcherScheduler()));
       return publisher -> from(publisher).publishOn(scheduler)
           .doOnSubscribe(subscription -> currentThread().setContextClassLoader(executionClassloader))
           .transform(pipeline);
     }
 
     protected Scheduler getFlowDispatcherScheduler() {
-      //TODO: check cap system property
-      return getCpuLightScheduler();
+      return flowDispatchScheduler;
     }
 
     @Override
