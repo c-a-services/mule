@@ -26,7 +26,7 @@ public abstract class StreamEmitterProcessingStrategyDecorator extends StreamEmi
   protected final StreamEmitterProcessingStrategy delegate;
 
   public StreamEmitterProcessingStrategyDecorator(StreamEmitterProcessingStrategy delegate) {
-    super(1, 1, () -> null, () -> null, 1, 1, false);
+    super(1, 1, () -> null, () -> null, 1, 1, false, null);
     this.delegate = delegate;
   }
 
@@ -38,11 +38,6 @@ public abstract class StreamEmitterProcessingStrategyDecorator extends StreamEmi
   @Override
   public ReactiveProcessor onPipeline(ReactiveProcessor pipeline) {
     return delegate.onPipeline(pipeline);
-  }
-
-  @Override
-  public Scheduler getFlowDispatcherScheduler() {
-    return delegate.getFlowDispatcherScheduler();
   }
 
   @Override

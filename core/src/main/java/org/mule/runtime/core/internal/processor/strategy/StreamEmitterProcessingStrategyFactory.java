@@ -17,6 +17,7 @@ import static reactor.core.scheduler.Schedulers.fromExecutorService;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.scheduler.Scheduler;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.util.concurrent.Latch;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.api.construct.BackPressureReason;
@@ -25,9 +26,11 @@ import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
 import org.mule.runtime.core.api.processor.Sink;
 import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
+import org.mule.runtime.core.internal.util.rx.ConditionalExecutorServiceDecorator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -48,7 +51,8 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
                                                                             schedulersNamePrefix),
                                                resolveParallelism(),
                                                getMaxConcurrency(),
-                                               isMaxConcurrencyEagerCheck());
+                                               isMaxConcurrencyEagerCheck(),
+                                               muleContext.getSchedulerService());
   }
 
   protected Supplier<Scheduler> getCpuLightSchedulerSupplier(MuleContext muleContext, String schedulersNamePrefix) {
@@ -75,8 +79,9 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
 
     private final int bufferSize;
     private final Supplier<Scheduler> flowDispatchSchedulerSupplier;
+    private final SchedulerService schedulerService;
 
-    private Scheduler flowDispatchScheduler;
+    private ScheduledExecutorService flowDispatchScheduler;
 
     public StreamEmitterProcessingStrategy(int bufferSize,
                                            int subscribers,
@@ -84,16 +89,28 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
                                            Supplier<Scheduler> cpuLightSchedulerSupplier,
                                            int parallelism,
                                            int maxConcurrency,
-                                           boolean maxConcurrencyEagerCheck) {
+                                           boolean maxConcurrencyEagerCheck,
+                                           SchedulerService schedulerService) {
       super(subscribers, cpuLightSchedulerSupplier, parallelism, maxConcurrency, maxConcurrencyEagerCheck);
       this.bufferSize = bufferSize;
       this.flowDispatchSchedulerSupplier = flowDispatchSchedulerSupplier;
+      this.schedulerService = schedulerService;
     }
 
     @Override
     public void start() throws MuleException {
       super.start();
-      flowDispatchScheduler = flowDispatchSchedulerSupplier.get();
+      flowDispatchScheduler = createFlowDispatchScheduler();
+    }
+
+    protected ScheduledExecutorService createFlowDispatchScheduler() {
+      return new ConditionalExecutorServiceDecorator(flowDispatchSchedulerSupplier.get(), sch -> {
+        if (sch instanceof Scheduler) {
+          return schedulerService.isCustomOrUnmanaged((Scheduler) sch);
+        }
+
+        return false;
+      });
     }
 
     @Override
@@ -151,7 +168,7 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
           .transform(pipeline);
     }
 
-    protected Scheduler getFlowDispatcherScheduler() {
+    protected ScheduledExecutorService getFlowDispatcherScheduler() {
       return flowDispatchScheduler;
     }
 

@@ -23,6 +23,7 @@ import org.mule.runtime.api.notification.FlowConstructNotification;
 import org.mule.runtime.api.notification.FlowConstructNotificationListener;
 import org.mule.runtime.api.util.Pair;
 import org.mule.runtime.core.api.MuleContext;
+import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.policy.OperationPolicyParametersTransformer;
 import org.mule.runtime.core.api.policy.Policy;
@@ -107,7 +108,8 @@ public class DefaultPolicyManager implements PolicyManager, Initialisable, Dispo
   @Override
   public SourcePolicy createSourcePolicyInstance(Component source, CoreEvent sourceEvent,
                                                  ReactiveProcessor flowExecutionProcessor,
-                                                 MessageSourceResponseParametersProcessor messageSourceResponseParametersProcessor) {
+                                                 MessageSourceResponseParametersProcessor messageSourceResponseParametersProcessor,
+                                                 FlowConstruct flowConstruct) {
     final ComponentIdentifier sourceIdentifier = source.getLocation().getComponentIdentifier().getIdentifier();
 
     if (!isPoliciesAvailable.get()) {
@@ -139,7 +141,8 @@ public class DefaultPolicyManager implements PolicyManager, Initialisable, Dispo
                  ? new NoSourcePolicy(flowExecutionProcessor)
                  : new CompositeSourcePolicy(innerKey.getSecond(), flowExecutionProcessor,
                                              lookupSourceParametersTransformer(sourceIdentifier),
-                                             sourcePolicyProcessorFactory)));
+                                             sourcePolicyProcessorFactory,
+                                             flowConstruct)));
   }
 
   @Override

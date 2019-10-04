@@ -14,6 +14,7 @@ import static reactor.core.publisher.Flux.from;
 import org.mule.runtime.api.component.execution.CompletableCallback;
 import org.mule.runtime.api.lifecycle.Disposable;
 import org.mule.runtime.api.message.Message;
+import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.policy.Policy;
@@ -57,6 +58,7 @@ public class CompositeSourcePolicy
   private final ReactiveProcessor flowExecutionProcessor;
 
   private final PolicyEventMapper policyEventMapper;
+  private final FlowConstruct flowConstruct;
 
   /**
    * Creates a new source policies composed by several {@link Policy} that will be chain together.
@@ -69,8 +71,10 @@ public class CompositeSourcePolicy
   public CompositeSourcePolicy(List<Policy> parameterizedPolicies,
                                ReactiveProcessor flowExecutionProcessor,
                                Optional<SourcePolicyParametersTransformer> sourcePolicyParametersTransformer,
-                               SourcePolicyProcessorFactory sourcePolicyProcessorFactory) {
+                               SourcePolicyProcessorFactory sourcePolicyProcessorFactory,
+                               FlowConstruct flowConstruct) {
     super(parameterizedPolicies, sourcePolicyParametersTransformer);
+    this.flowConstruct = flowConstruct;
     this.flowExecutionProcessor = flowExecutionProcessor;
     this.sourcePolicyProcessorFactory = sourcePolicyProcessorFactory;
     this.commonPolicy = new CommonSourcePolicy(new SourceWithPoliciesFluxObjectFactory(), sourcePolicyParametersTransformer);
@@ -85,7 +89,7 @@ public class CompositeSourcePolicy
 
       Flux<Either<SourcePolicyFailureResult, SourcePolicySuccessResult>> policyFlux =
           Flux.create(sinkRef)
-              .transform(getExecutionProcessor())
+              .transform(flowConstruct.getProcessingStrategy().onPipeline(getExecutionProcessor()))
               .map(policiesResultEvent -> right(SourcePolicyFailureResult.class,
                                                 new SourcePolicySuccessResult(policiesResultEvent,
                                                                               resolveSuccessResponseParameters(policiesResultEvent),

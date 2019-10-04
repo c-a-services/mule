@@ -83,7 +83,8 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
                                                        resolveParallelism(),
                                                        getMaxConcurrency(),
                                                        isMaxConcurrencyEagerCheck(),
-                                                       muleContext.getConfiguration().isThreadLoggingEnabled());
+                                                       muleContext.getConfiguration().isThreadLoggingEnabled(),
+                                                       muleContext.getSchedulerService());
   }
 
   @Override
@@ -131,9 +132,10 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
                                                    int parallelism,
                                                    int maxConcurrency,
                                                    boolean maxConcurrencyEagerCheck,
-                                                   boolean isThreadLoggingEnabled) {
+                                                   boolean isThreadLoggingEnabled,
+                                                   SchedulerService schedulerService) {
       super(bufferSize, subscriberCount, flowDispatchSchedulerSupplier, cpuLightSchedulerSupplier, parallelism, maxConcurrency,
-            maxConcurrencyEagerCheck);
+            maxConcurrencyEagerCheck, schedulerService);
       this.blockingSchedulerSupplier = blockingSchedulerSupplier;
       this.cpuIntensiveSchedulerSupplier = cpuIntensiveSchedulerSupplier;
       this.isThreadLoggingEnabled = isThreadLoggingEnabled;
@@ -144,6 +146,11 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
       super.start();
       this.blockingScheduler = blockingSchedulerSupplier.get();
       this.cpuIntensiveScheduler = cpuIntensiveSchedulerSupplier.get();
+    }
+
+    @Override
+    protected ScheduledExecutorService createFlowDispatchScheduler() {
+      return getCpuLightScheduler();
     }
 
     @Override
@@ -294,11 +301,6 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
                        : scheduler.toString()),
                    SCHEDULER_BUSY_RETRY_INTERVAL_MS);
       lastRetryTimestamp.set(nanoTime());
-    }
-
-    @Override
-    protected Scheduler getFlowDispatcherScheduler() {
-      return getCpuLightScheduler();
     }
   }
 }

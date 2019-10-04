@@ -129,6 +129,15 @@ public class SimpleUnitTestSupportSchedulerService implements SchedulerService, 
   }
 
   @Override
+  public boolean isCustomOrUnmanaged(Scheduler scheduler) {
+    if (scheduler instanceof SimpleUnitTestSupportLifecycleSchedulerDecorator) {
+      return customSchedulers.contains(((SimpleUnitTestSupportLifecycleSchedulerDecorator) scheduler).getDecorated());
+    }
+
+    return true;
+  }
+
+  @Override
   public Scheduler customScheduler(SchedulerConfig config, int queueSize) {
     final SimpleUnitTestSupportScheduler customScheduler =
         new SimpleUnitTestSupportCustomScheduler(config.getMaxConcurrentTasks(),

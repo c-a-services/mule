@@ -72,12 +72,15 @@ public class TransactionAwareProactorStreamEmitterProcessingStrategyTestCase
                                                                         new ProactorStreamEmitterProcessingStrategy(XS_BUFFER_SIZE,
                                                                                                                     2,
                                                                                                                     () -> cpuLight,
+                                                                                                                    () -> cpuLight,
                                                                                                                     () -> blocking,
                                                                                                                     () -> cpuIntensive,
                                                                                                                     MAX_VALUE,
                                                                                                                     MAX_VALUE,
                                                                                                                     false,
-                                                                                                                    false));
+                                                                                                                    false,
+                                                                                                                    muleContext
+                                                                                                                        .getSchedulerService()));
   }
 
   @Override
@@ -87,12 +90,15 @@ public class TransactionAwareProactorStreamEmitterProcessingStrategyTestCase
                                                                         new ProactorStreamEmitterProcessingStrategy(XS_BUFFER_SIZE,
                                                                                                                     2,
                                                                                                                     () -> cpuLight,
+                                                                                                                    () -> cpuLight,
                                                                                                                     () -> blocking,
                                                                                                                     () -> cpuIntensive,
                                                                                                                     maxConcurrency,
                                                                                                                     maxConcurrency,
                                                                                                                     true,
-                                                                                                                    false));
+                                                                                                                    false,
+                                                                                                                    muleContext
+                                                                                                                        .getSchedulerService()));
   }
 
   @Override

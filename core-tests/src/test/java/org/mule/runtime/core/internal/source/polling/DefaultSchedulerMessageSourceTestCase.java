@@ -58,7 +58,7 @@ public class DefaultSchedulerMessageSourceTestCase extends AbstractMuleContextTe
   public void setUp() throws Exception {
     policyManager = mock(PolicyManager.class);
     sourcePolicy = mock(SourcePolicy.class);
-    when(policyManager.createSourcePolicyInstance(any(), any(), any(), any())).thenReturn(sourcePolicy);
+    when(policyManager.createSourcePolicyInstance(any(), any(), any(), any(), any())).thenReturn(sourcePolicy);
 
     MuleMessageProcessingManager processingManager = new MuleMessageProcessingManager();
     processingManager.setMuleContext(muleContext);

@@ -12,6 +12,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Optional.empty;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -51,6 +52,7 @@ import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.exception.FlowExceptionHandler;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
+import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
 import org.mule.runtime.core.api.source.MessageSource;
 import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.message.ErrorBuilder;
@@ -84,6 +86,7 @@ public class FlowProcessMediatorTestCase extends AbstractMuleTestCase {
       ErrorTypeBuilder.builder().parentErrorType(mock(ErrorType.class)).namespace("TEST").identifier("FLOW_FAILED").build();
 
   private FlowConstruct flow;
+  private ProcessingStrategy processingStrategy;
   private MessageProcessContext context;
   private SourceResultAdapter resultAdapter;
   private FlowProcessTemplate template;
@@ -123,9 +126,19 @@ public class FlowProcessMediatorTestCase extends AbstractMuleTestCase {
     event = mock(CoreEvent.class);
     mockException = mock(RuntimeException.class);
 
+    flow = mock(FlowConstruct.class, withSettings().extraInterfaces(Component.class));
+    final FlowExceptionHandler exceptionHandler = mock(FlowExceptionHandler.class);
+    when(flow.getExceptionListener()).thenReturn(exceptionHandler);
+    when(exceptionHandler.apply(any()))
+        .thenAnswer(invocationOnMock -> error((MessagingException) invocationOnMock.getArgument(0)));
+    when(flow.getMuleContext()).thenReturn(muleContext);
+    processingStrategy = mock(ProcessingStrategy.class);
+    when(flow.getProcessingStrategy()).thenReturn(processingStrategy);
+
+
     policyManager = mock(PolicyManager.class);
     sourcePolicy = mock(SourcePolicy.class);
-    when(policyManager.createSourcePolicyInstance(any(), any(), any(), any())).thenReturn(sourcePolicy);
+    when(policyManager.createSourcePolicyInstance(any(), any(), any(), any(), same(flow))).thenReturn(sourcePolicy);
     successResult = mock(SourcePolicySuccessResult.class);
     when(successResult.getResult()).then(invocation -> event);
     when(successResult.getResponseParameters()).thenReturn(() -> emptyMap());
@@ -146,13 +159,6 @@ public class FlowProcessMediatorTestCase extends AbstractMuleTestCase {
     flowProcessMediator.setMuleContext(muleContext);
     initialiseIfNeeded(flowProcessMediator, muleContext);
     startIfNeeded(flowProcessMediator);
-
-    flow = mock(FlowConstruct.class, withSettings().extraInterfaces(Component.class));
-    final FlowExceptionHandler exceptionHandler = mock(FlowExceptionHandler.class);
-    when(flow.getExceptionListener()).thenReturn(exceptionHandler);
-    when(exceptionHandler.apply(any()))
-        .thenAnswer(invocationOnMock -> error((MessagingException) invocationOnMock.getArgument(0)));
-    when(flow.getMuleContext()).thenReturn(muleContext);
 
     context = mock(MessageProcessContext.class);
     final MessageSource source = mock(MessageSource.class);
@@ -353,8 +359,12 @@ public class FlowProcessMediatorTestCase extends AbstractMuleTestCase {
 
   @Test
   public void failurePolicyManager() throws Exception {
-    when(policyManager.createSourcePolicyInstance(any(Component.class), any(CoreEvent.class), any(ReactiveProcessor.class),
-                                                  any(MessageSourceResponseParametersProcessor.class))).thenThrow(mockException);
+    when(policyManager.createSourcePolicyInstance(any(Component.class),
+                                                  any(CoreEvent.class),
+                                                  any(ReactiveProcessor.class),
+                                                  any(MessageSourceResponseParametersProcessor.class),
+                                                  any(FlowConstruct.class)))
+                                                      .thenThrow(mockException);
     when(template.getFailedExecutionResponseParametersFunction()).thenReturn(coreEvent -> emptyMap());
 
     flowProcessMediator.process(template, context, notifier);

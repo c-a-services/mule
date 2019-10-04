@@ -158,7 +158,7 @@ public class FlowProcessMediator implements Initialisable {
 
       try {
         final SourcePolicy policy =
-            policyManager.createSourcePolicyInstance(messageSource, event, flowExecutionProcessor, template);
+            policyManager.createSourcePolicyInstance(messageSource, event, flowExecutionProcessor, template, flowConstruct);
 
         final PhaseContext phaseContext = new PhaseContext(template,
                                                            messageSource,

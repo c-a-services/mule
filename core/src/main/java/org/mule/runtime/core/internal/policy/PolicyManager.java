@@ -8,6 +8,7 @@ package org.mule.runtime.core.internal.policy;
 
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.metadata.TypedValue;
+import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
 import org.mule.runtime.core.internal.message.InternalEvent;
@@ -36,7 +37,8 @@ public interface PolicyManager {
    */
   SourcePolicy createSourcePolicyInstance(Component source, CoreEvent sourceEvent,
                                           ReactiveProcessor flowExecutionProcessor,
-                                          MessageSourceResponseParametersProcessor messageSourceResponseParametersProcessor);
+                                          MessageSourceResponseParametersProcessor messageSourceResponseParametersProcessor,
+                                          FlowConstruct flowConstruct);
 
   /**
    * Creates and generates the {@link PolicyPointcutParameters} for the given {@code source} and {@code attributes}, and adds it

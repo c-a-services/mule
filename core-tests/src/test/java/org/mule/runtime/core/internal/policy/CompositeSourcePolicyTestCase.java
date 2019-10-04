@@ -13,7 +13,6 @@ import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
@@ -32,17 +31,16 @@ import static reactor.core.publisher.Mono.error;
 
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.message.Message;
+import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.policy.Policy;
 import org.mule.runtime.core.api.policy.SourcePolicyParametersTransformer;
 import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
-import org.mule.runtime.core.internal.event.DefaultEventBuilder;
-import org.mule.runtime.core.internal.exception.DefaultErrorTypeRepository;
+import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
 import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.execution.SourcePolicyTestUtils;
-import org.mule.runtime.core.internal.message.ErrorBuilder;
 import org.mule.runtime.core.privileged.event.BaseEventContext;
 
 import java.util.List;
@@ -70,13 +68,15 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
       mock(SourcePolicyParametersTransformer.class);
   private final MessageSourceResponseParametersProcessor sourceParametersProcessor =
       mock(MessageSourceResponseParametersProcessor.class, RETURNS_DEEP_STUBS);
-
-  private CoreEvent initialEvent;
-  private CoreEvent modifiedEvent;
   private final Processor flowExecutionProcessor = mock(Processor.class);
   private final CoreEvent nextProcessResultEvent = mock(CoreEvent.class);
   private final SourcePolicyProcessorFactory sourcePolicyProcessorFactory =
       mock(SourcePolicyProcessorFactory.class, RETURNS_DEEP_STUBS);
+  private final FlowConstruct flowConstruct = mock(FlowConstruct.class);
+  private final ProcessingStrategy processingStrategy = mock(ProcessingStrategy.class);
+
+  private CoreEvent initialEvent;
+  private CoreEvent modifiedEvent;
 
   private CoreEvent flowActualResultEvent;
 
@@ -88,6 +88,9 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
   public void setUp() throws Exception {
     initialEvent = createTestEvent();
     modifiedEvent = createTestEvent();
+
+    when(flowConstruct.getProcessingStrategy()).thenReturn(processingStrategy);
+    when(processingStrategy.onPipeline(any())).thenAnswer(inv -> inv.getArgument(0));
 
     when(nextProcessResultEvent.getMessage()).thenReturn(mock(Message.class));
     when(flowExecutionProcessor.apply(any())).thenAnswer(invocation -> {
@@ -120,8 +123,11 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
 
   @Test
   public void singlePolicy() throws Throwable {
-    compositeSourcePolicy = new CompositeSourcePolicy(asList(firstPolicy), flowExecutionProcessor,
-                                                      of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+    compositeSourcePolicy = new CompositeSourcePolicy(asList(firstPolicy),
+                                                      flowExecutionProcessor,
+                                                      of(sourcePolicyParametersTransformer),
+                                                      sourcePolicyProcessorFactory,
+                                                      flowConstruct);
 
     Either<SourcePolicyFailureResult, SourcePolicySuccessResult> sourcePolicyResult =
         block(callback -> compositeSourcePolicy.process(initialEvent, sourceParametersProcessor, callback));
@@ -141,8 +147,11 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
   @Test
   public void compositePolicy() throws Throwable {
     compositeSourcePolicy =
-        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy), flowExecutionProcessor,
-                                  of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy),
+                                  flowExecutionProcessor,
+                                  of(sourcePolicyParametersTransformer),
+                                  sourcePolicyProcessorFactory,
+                                  flowConstruct);
 
     Either<SourcePolicyFailureResult, SourcePolicySuccessResult> sourcePolicyResult =
         block(callback -> compositeSourcePolicy.process(initialEvent, sourceParametersProcessor, callback));
@@ -163,8 +172,11 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
 
   @Test(expected = IllegalArgumentException.class)
   public void emptyPolicyList() {
-    compositeSourcePolicy = new CompositeSourcePolicy(emptyList(), flowExecutionProcessor,
-                                                      of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+    compositeSourcePolicy = new CompositeSourcePolicy(emptyList(),
+                                                      flowExecutionProcessor,
+                                                      of(sourcePolicyParametersTransformer),
+                                                      sourcePolicyProcessorFactory,
+                                                      flowConstruct);
   }
 
   @Test
@@ -187,8 +199,11 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
     });
 
     compositeSourcePolicy =
-        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy), flowExecutionProcessor,
-                                  of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy),
+                                  flowExecutionProcessor,
+                                  of(sourcePolicyParametersTransformer),
+                                  sourcePolicyProcessorFactory,
+                                  flowConstruct);
 
     Either<SourcePolicyFailureResult, SourcePolicySuccessResult> sourcePolicyResult =
         block(callback -> compositeSourcePolicy.process(initialEvent, sourceParametersProcessor, callback));
@@ -226,8 +241,11 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
     });
 
     compositeSourcePolicy =
-        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy), flowExecutionProcessor,
-                                  of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy),
+                                  flowExecutionProcessor,
+                                  of(sourcePolicyParametersTransformer),
+                                  sourcePolicyProcessorFactory,
+                                  flowConstruct);
 
     Either<SourcePolicyFailureResult, SourcePolicySuccessResult> sourcePolicyResult =
         block(callback -> compositeSourcePolicy.process(initialEvent, sourceParametersProcessor, callback));
@@ -242,7 +260,9 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
     InvocationsRecordingCompositeSourcePolicy.reset();
     final InvocationsRecordingCompositeSourcePolicy sourcePolicy =
         new InvocationsRecordingCompositeSourcePolicy(asList(firstPolicy), flowExecutionProcessor,
-                                                      of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+                                                      of(sourcePolicyParametersTransformer),
+                                                      sourcePolicyProcessorFactory,
+                                                      flowConstruct);
 
     assertThat(sourcePolicy.getNextOperationCount(), is(getRuntime().availableProcessors()));
     assertThat(sourcePolicy.getPolicyCount(), is(getRuntime().availableProcessors()));
@@ -266,8 +286,11 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
         .thenReturn(errorParameters);
 
     compositeSourcePolicy =
-        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy), flowExecutionProcessor,
-                                  of(sourcePolicyParametersTransformer), sourcePolicyProcessorFactory);
+        new CompositeSourcePolicy(asList(firstPolicy, secondPolicy),
+                                  flowExecutionProcessor,
+                                  of(sourcePolicyParametersTransformer),
+                                  sourcePolicyProcessorFactory,
+                                  flowConstruct);
 
     compositeSourcePolicy.dispose();
 
@@ -291,8 +314,10 @@ public class CompositeSourcePolicyTestCase extends AbstractCompositePolicyTestCa
 
     public InvocationsRecordingCompositeSourcePolicy(List<Policy> parameterizedPolicies, ReactiveProcessor flowExecutionProcessor,
                                                      Optional<SourcePolicyParametersTransformer> sourcePolicyParametersTransformer,
-                                                     SourcePolicyProcessorFactory sourcePolicyProcessorFactory) {
-      super(parameterizedPolicies, flowExecutionProcessor, sourcePolicyParametersTransformer, sourcePolicyProcessorFactory);
+                                                     SourcePolicyProcessorFactory sourcePolicyProcessorFactory,
+                                                     FlowConstruct flowConstruct) {
+      super(parameterizedPolicies, flowExecutionProcessor, sourcePolicyParametersTransformer, sourcePolicyProcessorFactory,
+            flowConstruct);
     }
 
     public static void reset() {

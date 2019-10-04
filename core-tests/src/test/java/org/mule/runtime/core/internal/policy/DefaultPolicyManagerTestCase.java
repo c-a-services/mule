@@ -22,11 +22,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mule.runtime.core.internal.policy.PolicyPointcutParametersManager.POLICY_SOURCE_POINTCUT_PARAMETERS;
 import static org.mule.runtime.dsl.api.component.config.DefaultComponentLocation.fromSingleComponent;
+
 import org.mule.runtime.api.artifact.Registry;
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.api.config.bootstrap.ArtifactType;
+import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.context.notification.ServerNotificationManager;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.policy.Policy;
@@ -51,6 +53,8 @@ public class DefaultPolicyManagerTestCase extends AbstractMuleTestCase {
   private Component flow2Component;
   private Component operation1Component;
   private Component operation2Component;
+
+  private FlowConstruct flowConstruct;
 
   @Before
   public void before() throws InitialisationException {
@@ -82,6 +86,8 @@ public class DefaultPolicyManagerTestCase extends AbstractMuleTestCase {
     when(operation1Component.getLocation()).thenReturn(fromSingleComponent("flow/processors/1"));
     operation2Component = mock(Component.class);
     when(operation2Component.getLocation()).thenReturn(fromSingleComponent("flow/processors/2"));
+
+    flowConstruct = mock(FlowConstruct.class);
   }
 
   @After
@@ -94,10 +100,16 @@ public class DefaultPolicyManagerTestCase extends AbstractMuleTestCase {
     when(policyProvider.findSourceParameterizedPolicies(any())).thenReturn(emptyList());
     policiesChangeCallbackCaptor.getValue().run();
 
-    final SourcePolicy policy1 = policyManager.createSourcePolicyInstance(flow1Component, mock(CoreEvent.class), ePub -> ePub,
-                                                                          mock(MessageSourceResponseParametersProcessor.class));
-    final SourcePolicy policy2 = policyManager.createSourcePolicyInstance(flow2Component, mock(CoreEvent.class), ePub -> ePub,
-                                                                          mock(MessageSourceResponseParametersProcessor.class));
+    final SourcePolicy policy1 = policyManager.createSourcePolicyInstance(flow1Component,
+                                                                          mock(CoreEvent.class),
+                                                                          ePub -> ePub,
+                                                                          mock(MessageSourceResponseParametersProcessor.class),
+                                                                          flowConstruct);
+    final SourcePolicy policy2 = policyManager.createSourcePolicyInstance(flow2Component,
+                                                                          mock(CoreEvent.class),
+                                                                          ePub -> ePub,
+                                                                          mock(MessageSourceResponseParametersProcessor.class),
+                                                                          flowConstruct);
 
     assertThat(policy1, instanceOf(NoSourcePolicy.class));
     assertThat(policy2, instanceOf(NoSourcePolicy.class));
@@ -125,10 +137,16 @@ public class DefaultPolicyManagerTestCase extends AbstractMuleTestCase {
     final InternalEvent event2 = mock(InternalEvent.class);
     when(event2.getInternalParameter(POLICY_SOURCE_POINTCUT_PARAMETERS)).thenReturn(policyParams2);
 
-    final SourcePolicy policy1 = policyManager.createSourcePolicyInstance(flow1Component, event1, ePub -> ePub,
-                                                                          mock(MessageSourceResponseParametersProcessor.class));
-    final SourcePolicy policy2 = policyManager.createSourcePolicyInstance(flow1Component, event2, ePub -> ePub,
-                                                                          mock(MessageSourceResponseParametersProcessor.class));
+    final SourcePolicy policy1 = policyManager.createSourcePolicyInstance(flow1Component,
+                                                                          event1,
+                                                                          ePub -> ePub,
+                                                                          mock(MessageSourceResponseParametersProcessor.class),
+                                                                          flowConstruct);
+    final SourcePolicy policy2 = policyManager.createSourcePolicyInstance(flow1Component,
+                                                                          event2,
+                                                                          ePub -> ePub,
+                                                                          mock(MessageSourceResponseParametersProcessor.class),
+                                                                          flowConstruct);
 
     assertThat(policy1, instanceOf(CompositeSourcePolicy.class));
     assertThat(policy2, instanceOf(CompositeSourcePolicy.class));
@@ -151,10 +169,16 @@ public class DefaultPolicyManagerTestCase extends AbstractMuleTestCase {
     final InternalEvent event = mock(InternalEvent.class);
     when(event.getInternalParameter(POLICY_SOURCE_POINTCUT_PARAMETERS)).thenReturn(policyParams);
 
-    final SourcePolicy policy1 = policyManager.createSourcePolicyInstance(flow1Component, event, ePub -> ePub,
-                                                                          mock(MessageSourceResponseParametersProcessor.class));
-    final SourcePolicy policy2 = policyManager.createSourcePolicyInstance(flow2Component, event, ePub -> ePub,
-                                                                          mock(MessageSourceResponseParametersProcessor.class));
+    final SourcePolicy policy1 = policyManager.createSourcePolicyInstance(flow1Component,
+                                                                          event,
+                                                                          ePub -> ePub,
+                                                                          mock(MessageSourceResponseParametersProcessor.class),
+                                                                          flowConstruct);
+    final SourcePolicy policy2 = policyManager.createSourcePolicyInstance(flow2Component,
+                                                                          event,
+                                                                          ePub -> ePub,
+                                                                          mock(MessageSourceResponseParametersProcessor.class),
+                                                                          flowConstruct);
 
     assertThat(policy1, instanceOf(CompositeSourcePolicy.class));
     assertThat(policy2, instanceOf(CompositeSourcePolicy.class));
