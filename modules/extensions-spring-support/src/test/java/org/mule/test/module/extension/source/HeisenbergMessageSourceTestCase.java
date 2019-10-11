@@ -261,7 +261,7 @@ public class HeisenbergMessageSourceTestCase extends AbstractExtensionFunctional
     probe(TIMEOUT_MILLIS, POLL_DELAY_MILLIS, () -> assertState(false, true, true));
   }
 
-  @FlakyTest(times=1000)
+  @FlakyTest(times = 1000)
   @Test
   public void failureInFlowCallsOnErrorDirectlyAndFailsHandlingIt() throws Exception {
     startFlow("failureInFlowCallsOnErrorDirectlyAndFailsHandlingIt");
