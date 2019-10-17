@@ -478,7 +478,7 @@ public class MessageProcessors {
                     .map(event -> right(MessagingException.class, event))
 
                     // This Either here is used to propagate errors. If the error is sent directly through the merged with Flux,
-                    // it will be cancelled, ignoring the onErrorcontinue of the parent Flux.
+                    // it will be cancelled, ignoring the onErrorContinue of the parent Flux.
                     .doOnComplete(() -> errorSwitchSinkSinkRef.complete())
                     .mergeWith(create(errorSwitchSinkSinkRef))
 
@@ -496,7 +496,9 @@ public class MessageProcessors {
       try {
         if (throwable != null) {
           final MessagingException error = (MessagingException) throwable;
-          errorSwitchSinkSinkRef.next(left(new MessagingException(toParentContext(error.getEvent()), error)));
+          if (!(throwable.getCause() instanceof FlowBackPressureException)) {
+            errorSwitchSinkSinkRef.next(left(new MessagingException(toParentContext(error.getEvent()), error)));
+          }
         } else if (response == null && completeParentIfEmpty) {
           getParentContext(eventChildCtx).success();
           errorSwitchSinkSinkRef.next();
