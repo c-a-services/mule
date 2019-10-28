@@ -496,9 +496,7 @@ public class MessageProcessors {
       try {
         if (throwable != null) {
           final MessagingException error = (MessagingException) throwable;
-          if (!(throwable.getCause() instanceof FlowBackPressureException)) {
-            errorSwitchSinkSinkRef.next(left(new MessagingException(toParentContext(error.getEvent()), error)));
-          }
+          errorSwitchSinkSinkRef.next(left(error));
         } else if (response == null && completeParentIfEmpty) {
           getParentContext(eventChildCtx).success();
           errorSwitchSinkSinkRef.next();
