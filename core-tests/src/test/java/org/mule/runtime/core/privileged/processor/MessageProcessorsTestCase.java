@@ -297,34 +297,6 @@ public class MessageProcessorsTestCase extends AbstractMuleContextTestCase {
   }
 
   @Test
-  @Issue("MULE-17386")
-  public void processErrorWithChildContextAndHandledByParent() {
-    Reference<EventContext> contextReference = new Reference<>();
-    Reference<CoreEvent> eventReference = new Reference<>();
-
-    InternalReactiveProcessor backPressureError = publisher -> from(publisher).map(in -> {
-      throw propagateWrappingFatal(new FlowBackPressureMaxConcurrencyExceededException("flowName", MAX_CONCURRENCY_EXCEEDED));
-    });
-
-    Flux.from(applyWithChildContext(just(input), createChain(backPressureError), Optional.empty(),
-                                    (exception, event) -> {
-                                      contextReference
-                                          .set(((MessagingException) exception).getEvent().getContext());
-                                      eventReference
-                                          .set(event);
-                                      return event;
-                                    }))
-        .subscribe();
-
-    assertThat(contextReference.get(), notNullValue());
-    assertThat(contextReference.get(), is(not(input.getContext())));
-    BaseEventContext context = (BaseEventContext) contextReference.get();
-    assertThat(context.getParentContext().get(), is(input.getContext()));
-
-    assertThat(context, is(eventReference.get().getContext()));
-  }
-
-  @Test
   @Issue("MULE-16892")
   public void processWithChildContextDontCompleteErrorInChainRegainsParentContext() {
     Reference<EventContext> contextReference = new Reference<>();
