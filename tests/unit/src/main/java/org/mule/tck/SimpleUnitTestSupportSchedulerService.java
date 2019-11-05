@@ -6,6 +6,7 @@
  */
 package org.mule.tck;
 
+import static java.lang.Thread.currentThread;
 import static java.util.Collections.synchronizedList;
 import static java.util.Collections.unmodifiableList;
 import static org.mockito.ArgumentMatchers.any;
@@ -138,6 +139,11 @@ public class SimpleUnitTestSupportSchedulerService implements SchedulerService, 
     final SimpleUnitTestSupportLifecycleSchedulerDecorator decorator = decorateScheduler(customScheduler);
     decorators.add(decorator);
     return decorator;
+  }
+
+  @Override
+  public boolean isCurrentThreadForCpuWork() {
+    return currentThread().getThreadGroup() == UNIT_TEST_THREAD_GROUP;
   }
 
   private NamedThreadFactory buildThreadFactory(SchedulerConfig config) {

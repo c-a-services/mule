@@ -53,22 +53,24 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
   @Override
   public ProcessingStrategy create(MuleContext muleContext, String schedulersNamePrefix) {
     Supplier<Scheduler> cpuLightSchedulerSupplier = getCpuLightSchedulerSupplier(muleContext, schedulersNamePrefix);
+    SchedulerService schedulerService = muleContext.getSchedulerService();
     return new ProactorStreamEmitterProcessingStrategy(getBufferSize(),
                                                        getSubscriberCount(),
                                                        cpuLightSchedulerSupplier,
                                                        cpuLightSchedulerSupplier,
-                                                       () -> muleContext.getSchedulerService()
+                                                       () -> schedulerService
                                                            .ioScheduler(muleContext.getSchedulerBaseConfig()
                                                                .withName(
                                                                          schedulersNamePrefix + "." + BLOCKING.name())),
-                                                       () -> muleContext.getSchedulerService()
+                                                       () -> schedulerService
                                                            .cpuIntensiveScheduler(muleContext.getSchedulerBaseConfig()
                                                                .withName(schedulersNamePrefix + "."
                                                                    + CPU_INTENSIVE.name())),
                                                        resolveParallelism(),
                                                        getMaxConcurrency(),
                                                        isMaxConcurrencyEagerCheck(),
-                                                       muleContext.getConfiguration().isThreadLoggingEnabled());
+                                                       muleContext.getConfiguration().isThreadLoggingEnabled(),
+                                                       schedulerService);
   }
 
   @Override
@@ -107,9 +109,10 @@ public class ProactorStreamEmitterProcessingStrategyFactory extends AbstractStre
                                                    int parallelism,
                                                    int maxConcurrency,
                                                    boolean maxConcurrencyEagerCheck,
-                                                   boolean isThreadLoggingEnabled) {
+                                                   boolean isThreadLoggingEnabled,
+                                                   SchedulerService schedulerService) {
       super(bufferSize, subscriberCount, flowDispatchSchedulerSupplier, cpuLightSchedulerSupplier, parallelism, maxConcurrency,
-            maxConcurrencyEagerCheck);
+            maxConcurrencyEagerCheck, schedulerService);
       this.blockingSchedulerSupplier = blockingSchedulerSupplier;
       this.cpuIntensiveSchedulerSupplier = cpuIntensiveSchedulerSupplier;
       this.isThreadLoggingEnabled = isThreadLoggingEnabled;

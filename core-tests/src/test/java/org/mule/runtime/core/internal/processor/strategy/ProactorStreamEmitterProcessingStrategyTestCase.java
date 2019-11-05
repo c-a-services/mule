@@ -132,7 +132,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                        CORES,
                                                        maxConcurrency,
                                                        true,
-                                                       false);
+                                                       false,
+                                                       muleContext.getSchedulerService());
   }
 
   @Override
@@ -291,7 +292,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     1,
                                                                                                     2,
                                                                                                     true,
-                                                                                                    false))
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService()))
         .build();
     flow.initialise();
     flow.start();
@@ -330,7 +332,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     1,
                                                                                                     2,
                                                                                                     true,
-                                                                                                    false))
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService()))
         .build();
     flow.initialise();
     flow.start();
@@ -367,7 +370,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     CORES,
                                                                                                     1,
                                                                                                     true,
-                                                                                                    false)),
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService())),
                        true, CPU_LITE, 1);
     assertThat(threads, hasSize(1));
     assertThat(threads, hasItem(startsWith(CPU_LIGHT)));
@@ -389,7 +393,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     CORES,
                                                                                                     2,
                                                                                                     true,
-                                                                                                    false)),
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService())),
                        true, CPU_LITE, 2);
     assertThat(threads, hasSize(2));
     assertThat(threads, not(hasItem(startsWith(IO))));
@@ -413,7 +418,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     CORES,
                                                                                                     1,
                                                                                                     true,
-                                                                                                    false)),
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService())),
                        true, BLOCKING, 1);
     assertThat(threads, hasSize(1));
     assertThat(threads.stream().filter(name -> name.startsWith(IO)).count(), equalTo(1l));
@@ -437,7 +443,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     1,
                                                                                                     2,
                                                                                                     true,
-                                                                                                    false)),
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService())),
                        true, BLOCKING, 2);
     assertThat(threads, hasSize(2));
     // assertThat(threads.stream().filter(name -> name.startsWith(IO)).count(), equalTo(2l));
@@ -487,7 +494,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     4,
                                                                                                     2,
                                                                                                     true,
-                                                                                                    false))
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService()))
         .processors(blockingProcessor)
         .build();
     flow.initialise();
@@ -723,7 +731,8 @@ public class ProactorStreamEmitterProcessingStrategyTestCase extends AbstractPro
                                                                                                     4,
                                                                                                     2,
                                                                                                     true,
-                                                                                                    false))
+                                                                                                    false,
+                                                                                                    muleContext.getSchedulerService()))
         .source(triggerableMessageSource)
         .processors(cpuLightProcessor, cpuIntensiveProcessor).build();
     flow.initialise();

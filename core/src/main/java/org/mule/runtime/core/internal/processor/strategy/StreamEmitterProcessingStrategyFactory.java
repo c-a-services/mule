@@ -25,6 +25,7 @@ import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.scheduler.Scheduler;
 import org.mule.runtime.api.scheduler.SchedulerConfig;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.util.concurrent.Latch;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.api.construct.BackPressureReason;
@@ -33,6 +34,7 @@ import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
 import org.mule.runtime.core.api.processor.Sink;
 import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
+import org.mule.runtime.core.internal.util.rx.ConditionalExecutorServiceDecorator;
 import org.mule.runtime.core.internal.util.rx.RejectionCallbackExecutorServiceDecorator;
 import org.mule.runtime.core.privileged.event.BaseEventContext;
 
@@ -68,7 +70,8 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
                                                                             schedulersNamePrefix),
                                                resolveParallelism(),
                                                getMaxConcurrency(),
-                                               isMaxConcurrencyEagerCheck());
+                                               isMaxConcurrencyEagerCheck(),
+                                               muleContext.getSchedulerService());
   }
 
   protected Supplier<Scheduler> getCpuLightSchedulerSupplier(MuleContext muleContext, String schedulersNamePrefix) {
@@ -112,11 +115,11 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
             : MIN_VALUE;
 
     private final int sinksCount;
-    private boolean sinkCreated = false;
     private final AtomicInteger disposedEmittersCount = new AtomicInteger(0);
+    private final SchedulerService schedulerService;
 
+    private boolean sinkCreated = false;
     private Scheduler flowDispatchScheduler;
-
 
     public StreamEmitterProcessingStrategy(int bufferSize,
                                            int subscribers,
@@ -124,11 +127,13 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
                                            Supplier<Scheduler> cpuLightSchedulerSupplier,
                                            int parallelism,
                                            int maxConcurrency,
-                                           boolean maxConcurrencyEagerCheck) {
+                                           boolean maxConcurrencyEagerCheck,
+                                           SchedulerService schedulerService) {
       super(subscribers, cpuLightSchedulerSupplier, parallelism, maxConcurrency, maxConcurrencyEagerCheck);
       this.bufferSize = bufferSize;
       this.flowDispatchSchedulerSupplier = flowDispatchSchedulerSupplier;
       this.sinksCount = getSinksCount();
+      this.schedulerService = schedulerService;
     }
 
     @Override
@@ -242,8 +247,12 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
 
     @Override
     public ReactiveProcessor onPipeline(ReactiveProcessor pipeline) {
-      reactor.core.scheduler.Scheduler scheduler = fromExecutorService(decorateScheduler(getFlowDispatcherScheduler()));
-      return publisher -> from(publisher).publishOn(scheduler)
+      reactor.core.scheduler.Scheduler scheduler = fromExecutorService(new ConditionalExecutorServiceDecorator(
+          decorateScheduler(getFlowDispatcherScheduler()),
+          sch -> schedulerService.isCurrentThreadRuntimeOwned()));
+
+      return publisher -> from(publisher)
+          .publishOn(scheduler)
           .doOnSubscribe(subscription -> currentThread().setContextClassLoader(executionClassloader))
           .transform(pipeline);
     }
