@@ -146,6 +146,11 @@ public class SimpleUnitTestSupportSchedulerService implements SchedulerService, 
     return currentThread().getThreadGroup() == UNIT_TEST_THREAD_GROUP;
   }
 
+  @Override
+  public boolean isCurrentThreadRuntimeOwned() {
+    return isCurrentThreadForCpuWork();
+  }
+
   private NamedThreadFactory buildThreadFactory(SchedulerConfig config) {
     return new NamedThreadFactory(config.getSchedulerName() != null
         ? config.getSchedulerName()

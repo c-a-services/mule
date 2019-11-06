@@ -247,9 +247,9 @@ public class StreamEmitterProcessingStrategyFactory extends AbstractStreamProces
 
     @Override
     public ReactiveProcessor onPipeline(ReactiveProcessor pipeline) {
-      reactor.core.scheduler.Scheduler scheduler = fromExecutorService(new ConditionalExecutorServiceDecorator(
-          decorateScheduler(getFlowDispatcherScheduler()),
-          sch -> schedulerService.isCurrentThreadRuntimeOwned()));
+      reactor.core.scheduler.Scheduler scheduler =
+          fromExecutorService(new ConditionalExecutorServiceDecorator(decorateScheduler(getFlowDispatcherScheduler()),
+                                                                      sch -> schedulerService.isCurrentThreadRuntimeOwned()));
 
       return publisher -> from(publisher)
           .publishOn(scheduler)

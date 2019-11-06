@@ -79,7 +79,8 @@ public class TransactionAwareProactorStreamEmitterProcessingStrategyTestCase
                                                                                                                     MAX_VALUE,
                                                                                                                     false,
                                                                                                                     false,
-                                                                                                                    muleContext.getSchedulerService()));
+                                                                                                                    muleContext
+                                                                                                                        .getSchedulerService()));
   }
 
   @Override
@@ -96,7 +97,8 @@ public class TransactionAwareProactorStreamEmitterProcessingStrategyTestCase
                                                                                                                     maxConcurrency,
                                                                                                                     true,
                                                                                                                     false,
-                                                                                                                    muleContext.getSchedulerService()));
+                                                                                                                    muleContext
+                                                                                                                        .getSchedulerService()));
   }
 
   @Override
