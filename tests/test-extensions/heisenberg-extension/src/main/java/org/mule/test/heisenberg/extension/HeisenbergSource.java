@@ -10,6 +10,7 @@ import static java.lang.String.format;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mule.runtime.api.metadata.DataType.fromType;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.extension.api.annotation.param.MediaType.TEXT_PLAIN;
@@ -67,10 +68,12 @@ import org.mule.runtime.extension.api.runtime.source.SourceResult;
 import org.mule.test.heisenberg.extension.model.Methylamine;
 import org.mule.test.heisenberg.extension.model.PersonalInfo;
 import org.mule.test.heisenberg.extension.model.Weapon;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ScheduledFuture;
+import java.util.logging.Logger;
 
 import javax.inject.Inject;
 
@@ -244,7 +247,13 @@ public class HeisenbergSource extends Source<String, Object> {
   public void onStop() {
     if (executor != null) {
       scheduledFuture.cancel(true);
-      executor.stop();
+      try {
+        executor.awaitTermination(100, MILLISECONDS);
+      } catch (InterruptedException e) {
+        Logger.getLogger(HeisenbergSource.configName).info(String.format("Execution termination threw {}", e.getMessage()));
+      } finally {
+        executor.stop();
+      }
     }
 
     if (connection != null) {
