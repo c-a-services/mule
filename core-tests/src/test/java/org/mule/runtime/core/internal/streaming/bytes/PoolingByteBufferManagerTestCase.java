@@ -149,10 +149,10 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
 
     new Thread(() -> {
       try {
-        bufferManager.allocate(bufferCapacity);
+        bufferManager.allocateManaged(bufferCapacity);
         latch.release();
       } catch (Exception e) {
-        maxMemoryExhausted.set(e.getCause() instanceof MaxStreamingMemoryExceededException);
+        maxMemoryExhausted.set(e instanceof MaxStreamingMemoryExceededException);
       }
     }).start();
 
