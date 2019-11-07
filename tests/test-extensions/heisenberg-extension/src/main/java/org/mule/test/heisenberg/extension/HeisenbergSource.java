@@ -69,6 +69,7 @@ import org.mule.test.heisenberg.extension.model.PersonalInfo;
 import org.mule.test.heisenberg.extension.model.Weapon;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ScheduledFuture;
 
 import javax.inject.Inject;
@@ -86,16 +87,16 @@ public class HeisenbergSource extends Source<String, Object> {
   public static final String INITIAL_BATCH_NUMBER_ERROR_MESSAGE = "initialBatchNumber cannot be a negative value";
   private static final String BATCH_NUMBER = "batchNumber";
 
-  public static boolean receivedGroupOnSource;
-  public static boolean receivedInlineOnSuccess;
-  public static boolean receivedInlineOnError;
+  public static volatile boolean receivedGroupOnSource;
+  public static volatile boolean receivedInlineOnSuccess;
+  public static volatile boolean receivedInlineOnError;
 
-  public static TerminateStatus terminateStatus;
+  public static volatile TerminateStatus terminateStatus;
   public static java.util.Optional<Error> error;
 
-  public static boolean executedOnSuccess;
-  public static boolean executedOnError;
-  public static boolean executedOnTerminate;
+  public static volatile boolean executedOnSuccess;
+  public static volatile boolean executedOnError;
+  public static volatile boolean executedOnTerminate;
   public static long gatheredMoney;
 
   public static String configName;
