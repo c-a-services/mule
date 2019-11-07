@@ -18,17 +18,13 @@ import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
 import static org.mule.runtime.core.internal.streaming.bytes.ByteStreamingConstants.DEFAULT_BUFFER_BUCKET_SIZE;
 import static org.mule.runtime.core.internal.util.ConcurrencyUtils.withLock;
 import static org.slf4j.LoggerFactory.getLogger;
+
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.lifecycle.Disposable;
 import org.mule.runtime.core.api.streaming.bytes.ByteBufferManager;
 import org.mule.runtime.core.api.util.func.CheckedRunnable;
 import org.mule.runtime.core.internal.streaming.DefaultMemoryManager;
 import org.mule.runtime.core.internal.streaming.MemoryManager;
-
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -37,6 +33,10 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.cache.RemovalListener;
 import org.apache.commons.pool2.BasePooledObjectFactory;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.ObjectPool;
@@ -45,6 +45,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.slf4j.Logger;
+import stormpot.Pool;
 
 /**
  * {@link ByteBufferManager} implementation which pools instances for better performance.
@@ -206,11 +207,107 @@ public class PoolingByteBufferManager implements ByteBufferManager, Disposable {
   private class BufferPool {
 
     private final int bufferCapacity;
-    private final ObjectPool<ByteBuffer> pool;
+    private final Pool<ByteBuffer> pool;
     private final Lock lock = new ReentrantLock();
     private final Condition poolNotFull = lock.newCondition();
 
     private BufferPool(int bufferCapacity) {
+      this.bufferCapacity = bufferCapacity;
+      GenericObjectPoolConfig config = new GenericObjectPoolConfig();
+      config.setMaxIdle(MAX_IDLE);
+      config.setMaxTotal(-1);
+      config.setBlockWhenExhausted(false);
+      config.setTimeBetweenEvictionRunsMillis(MINUTES.toMillis(5));
+      config.setTestOnBorrow(false);
+      config.setTestOnReturn(false);
+      config.setTestWhileIdle(false);
+      config.setTestOnCreate(false);
+      config.setJmxEnabled(false);
+
+      pool = new GenericObjectPool<>(new BasePooledObjectFactory<ByteBuffer>() {
+
+        @Override
+        public ByteBuffer create() throws Exception {
+          if (streamingMemory.addAndGet(bufferCapacity) <= maxStreamingMemory) {
+            return ByteBuffer.allocate(bufferCapacity);
+          }
+
+          streamingMemory.addAndGet(-bufferCapacity);
+          throw new MaxStreamingMemoryExceededException(createStaticMessage(format(
+              "Max streaming memory limit of %d bytes was exceeded",
+              maxStreamingMemory)));
+        }
+
+        @Override
+        public PooledObject<ByteBuffer> wrap(ByteBuffer obj) {
+          return new DefaultPooledObject<>(obj);
+        }
+
+        @Override
+        public void activateObject(PooledObject<ByteBuffer> p) throws Exception {
+          p.getObject().clear();
+        }
+
+        @Override
+        public void destroyObject(PooledObject<ByteBuffer> p) throws Exception {
+          if (streamingMemory.addAndGet(-bufferCapacity) < maxStreamingMemory) {
+            signalPoolNotFull();
+          }
+        }
+      }, config);
+    }
+
+    private ByteBuffer take() throws Exception {
+      ByteBuffer buffer = null;
+      do {
+        try {
+          buffer = pool.borrowObject();
+        } catch (MaxStreamingMemoryExceededException e) {
+          signal(() -> {
+            while (streamingMemory.get() >= maxStreamingMemory) {
+              if (!poolNotFull.await(waitTimeoutMillis, MILLISECONDS)) {
+                throw e;
+              }
+            }
+          });
+        }
+      } while (buffer == null);
+
+      return buffer;
+    }
+
+    private void returnBuffer(ByteBuffer buffer) throws Exception {
+      pool.returnObject(buffer);
+      signalPoolNotFull();
+    }
+
+    private void signalPoolNotFull() {
+      signal(poolNotFull::signal);
+    }
+
+    private void close() {
+      streamingMemory.addAndGet(-bufferCapacity * (pool.getNumActive() + pool.getNumIdle()));
+      try {
+        pool.close();
+      } finally {
+        signal(poolNotFull::signalAll);
+      }
+    }
+
+    private void signal(CheckedRunnable task) {
+      withLock(lock, task);
+    }
+  }
+
+
+  private class SlowBufferPool {
+
+    private final int bufferCapacity;
+    private final ObjectPool<ByteBuffer> pool;
+    private final Lock lock = new ReentrantLock();
+    private final Condition poolNotFull = lock.newCondition();
+
+    private SlowBufferPool(int bufferCapacity) {
       this.bufferCapacity = bufferCapacity;
       GenericObjectPoolConfig config = new GenericObjectPoolConfig();
       config.setMaxIdle(MAX_IDLE);
