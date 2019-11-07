@@ -15,6 +15,7 @@ import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.streaming.exception.StreamingBufferSizeExceededException;
 import org.mule.runtime.core.api.streaming.bytes.ByteBufferManager;
 import org.mule.runtime.core.api.streaming.bytes.InMemoryCursorStreamConfig;
+import org.mule.runtime.core.api.streaming.bytes.ManagedByteBuffer;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,6 +36,7 @@ public class InMemoryStreamBuffer extends AbstractInputStreamBuffer {
 
   private static final int STREAM_FINISHED_PROBE = 10;
 
+  private ManagedByteBuffer managedByteBuffer;
   private ByteBuffer buffer;
   private final int bufferSizeIncrement;
   private final int maxBufferSize;
@@ -49,7 +51,8 @@ public class InMemoryStreamBuffer extends AbstractInputStreamBuffer {
    */
   public InMemoryStreamBuffer(InputStream stream, InMemoryCursorStreamConfig config, ByteBufferManager bufferManager) {
     super(stream, bufferManager);
-    buffer = bufferManager.allocate(config.getInitialBufferSize().toBytes());
+    managedByteBuffer = bufferManager.allocateManaged(config.getInitialBufferSize().toBytes());
+    buffer = managedByteBuffer.getBuffer();
     this.bufferSizeIncrement = config.getBufferSizeIncrement() != null
         ? config.getBufferSizeIncrement().toBytes()
         : 0;
@@ -124,7 +127,8 @@ public class InMemoryStreamBuffer extends AbstractInputStreamBuffer {
    */
   @Override
   public void doClose() {
-    deallocate(buffer);
+    deallocate(managedByteBuffer);
+    managedByteBuffer =  null;
     buffer = null;
   }
 
@@ -138,18 +142,23 @@ public class InMemoryStreamBuffer extends AbstractInputStreamBuffer {
   @Override
   public int consumeForwardData() throws IOException {
     ByteBuffer b = buffer;
-    ByteBuffer readBuffer = b.hasRemaining()
-        ? b
-        : bufferManager.allocate(bufferSizeIncrement > 0 ? bufferSizeIncrement : STREAM_FINISHED_PROBE);
+    ByteBuffer readBuffer;
+    ManagedByteBuffer managedReadBuffer = null;
 
-    final boolean auxBuffer = readBuffer != b;
+    if (b.hasRemaining()) {
+      readBuffer = b;
+    } else {
+      managedReadBuffer = bufferManager.allocateManaged(bufferSizeIncrement > 0 ? bufferSizeIncrement : STREAM_FINISHED_PROBE);
+      readBuffer = managedReadBuffer.getBuffer();
+    }
+
     final int read;
 
     try {
       read = consumeStream(readBuffer);
 
       if (read > 0) {
-        if (auxBuffer) {
+        if (managedReadBuffer != null) {
           b = expandBuffer();
           readBuffer.flip();
           b.put(readBuffer);
@@ -161,11 +170,10 @@ public class InMemoryStreamBuffer extends AbstractInputStreamBuffer {
         streamFullyConsumed = true;
       }
     } finally {
-      if (auxBuffer) {
-        bufferManager.deallocate(readBuffer);
+      if (managedReadBuffer != null) {
+        managedReadBuffer.deallocate();
       }
     }
-
 
     return read;
   }
@@ -182,11 +190,14 @@ public class InMemoryStreamBuffer extends AbstractInputStreamBuffer {
       throw new StreamingBufferSizeExceededException(maxBufferSize);
     }
 
-    ByteBuffer newBuffer = bufferManager.allocate(newSize);
+    ManagedByteBuffer newManagedBuffer = bufferManager.allocateManaged(newSize);
+    ByteBuffer newBuffer = newManagedBuffer.getBuffer();
     b.position(0);
     newBuffer.put(b);
-    ByteBuffer oldBuffer = b;
+    ManagedByteBuffer oldBuffer = managedByteBuffer;
     b = newBuffer;
+
+    managedByteBuffer = newManagedBuffer;
     buffer = b;
     deallocate(oldBuffer);
 

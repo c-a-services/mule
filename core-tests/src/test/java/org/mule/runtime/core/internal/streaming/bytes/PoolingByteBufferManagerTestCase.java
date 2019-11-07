@@ -9,7 +9,6 @@ package org.mule.runtime.core.internal.streaming.bytes;
 import static java.lang.Math.round;
 import static java.lang.System.clearProperty;
 import static java.lang.System.setProperty;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.hamcrest.CoreMatchers.is;
@@ -20,17 +19,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mule.runtime.core.api.config.MuleProperties.MULE_STREAMING_MAX_MEMORY;
+import static org.mule.runtime.api.util.MuleSystemProperties.MULE_STREAMING_MAX_MEMORY;
 import static org.mule.runtime.core.internal.streaming.bytes.PoolingByteBufferManager.MAX_STREAMING_PERCENTILE;
 import static org.mule.test.allure.AllureConstants.StreamingFeature.STREAMING;
+
 import org.mule.runtime.api.util.Reference;
 import org.mule.runtime.api.util.concurrent.Latch;
+import org.mule.runtime.core.api.streaming.bytes.ManagedByteBuffer;
 import org.mule.runtime.core.internal.streaming.MemoryManager;
 import org.mule.tck.junit4.AbstractMuleTestCase;
 import org.mule.tck.size.SmallTest;
-
-import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
 
 import io.qameta.allure.Feature;
 import org.junit.After;
@@ -42,8 +40,7 @@ import org.junit.rules.ExpectedException;
 @Feature(STREAMING)
 public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
 
-  private ExecutorService allocateExecutor = newSingleThreadExecutor();
-  private PoolingByteBufferManager bufferManager = new PoolingByteBufferManager(allocateExecutor);
+  private PoolingByteBufferManager bufferManager = new PoolingByteBufferManager();
   private static final int CAPACITY = 100;
   private static final int OTHER_CAPACITY = CAPACITY + 1;
 
@@ -53,41 +50,40 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
   @After
   public void after() {
     bufferManager.dispose();
-    allocateExecutor.shutdownNow();
   }
 
   @Test
   public void pooling() throws Exception {
-    ByteBuffer buffer = bufferManager.allocate(CAPACITY);
-    bufferManager.deallocate(buffer);
+    ManagedByteBuffer buffer = bufferManager.allocateManaged(CAPACITY);
+    buffer.deallocate();
 
-    ByteBuffer newBuffer = bufferManager.allocate(CAPACITY);
-    assertThat(buffer, is(sameInstance(newBuffer)));
+    ManagedByteBuffer newBuffer = bufferManager.allocateManaged(CAPACITY);
+    assertThat(buffer.getBuffer(), is(sameInstance(newBuffer.getBuffer())));
   }
 
   @Test
   public void grow() throws Exception {
-    ByteBuffer buffer = bufferManager.allocate(CAPACITY);
-    ByteBuffer newBuffer = bufferManager.allocate(CAPACITY);
+    ManagedByteBuffer buffer = bufferManager.allocateManaged(CAPACITY);
+    ManagedByteBuffer newBuffer = bufferManager.allocateManaged(CAPACITY);
 
-    assertThat(buffer, not(sameInstance(newBuffer)));
+    assertThat(buffer.getBuffer(), not(sameInstance(newBuffer.getBuffer())));
   }
 
   @Test
   public void differentPoolsPerCapacity() throws Exception {
-    ByteBuffer buffer = bufferManager.allocate(CAPACITY);
-    bufferManager.deallocate(buffer);
+    ManagedByteBuffer buffer = bufferManager.allocateManaged(CAPACITY);
+    buffer.deallocate();
 
-    ByteBuffer buffer2 = bufferManager.allocate(OTHER_CAPACITY);
-    assertThat(buffer, not(sameInstance(buffer2)));
+    ManagedByteBuffer buffer2 = bufferManager.allocateManaged(OTHER_CAPACITY);
+    assertThat(buffer.getBuffer(), not(sameInstance(buffer2.getBuffer())));
 
-    ByteBuffer buffer3 = bufferManager.allocate(OTHER_CAPACITY);
-    assertThat(buffer, not(sameInstance(buffer3)));
-    assertThat(buffer2, not(sameInstance(buffer3)));
+    ManagedByteBuffer buffer3 = bufferManager.allocateManaged(OTHER_CAPACITY);
+    assertThat(buffer.getBuffer(), not(sameInstance(buffer3.getBuffer())));
+    assertThat(buffer2.getBuffer(), not(sameInstance(buffer3.getBuffer())));
 
-    bufferManager.deallocate(buffer2);
-    ByteBuffer buffer2Reborn = bufferManager.allocate(OTHER_CAPACITY);
-    assertThat(buffer2, is(sameInstance(buffer2Reborn)));
+    buffer2.deallocate();
+    ManagedByteBuffer buffer2Reborn = bufferManager.allocateManaged(OTHER_CAPACITY);
+    assertThat(buffer2.getBuffer(), is(sameInstance(buffer2Reborn.getBuffer())));
   }
 
   @Test
@@ -106,7 +102,7 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
     when(memoryManager.getMaxMemory()).thenReturn(maxMemory);
 
     bufferManager.dispose();
-    bufferManager = new PoolingByteBufferManager(allocateExecutor, memoryManager, waitTimeoutMillis);
+    bufferManager = new PoolingByteBufferManager(memoryManager, waitTimeoutMillis);
 
     assertMemoryLimit(bufferCapacity.intValue(), waitTimeoutMillis);
   }
@@ -122,7 +118,7 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
     bufferManager.dispose();
     setProperty(MULE_STREAMING_MAX_MEMORY, String.valueOf(new Double(maxMemory * MAX_STREAMING_PERCENTILE).intValue()));
     try {
-      bufferManager = new PoolingByteBufferManager(allocateExecutor, memoryManager, waitTimeoutMillis);
+      bufferManager = new PoolingByteBufferManager(memoryManager, waitTimeoutMillis);
       assertMemoryLimit(bufferCapacity.intValue(), waitTimeoutMillis);
       verify(memoryManager, never()).getMaxMemory();
     } finally {
@@ -136,17 +132,17 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
     bufferManager.dispose();
     try {
       expectedException.expect(IllegalArgumentException.class);
-      bufferManager = new PoolingByteBufferManager(allocateExecutor, mock(MemoryManager.class), 10);
+      bufferManager = new PoolingByteBufferManager(mock(MemoryManager.class), 10);
     } finally {
       clearProperty(MULE_STREAMING_MAX_MEMORY);
     }
   }
 
   private void assertMemoryLimit(int bufferCapacity, long waitTimeoutMillis) throws InterruptedException {
-    ByteBuffer buffer1 = bufferManager.allocate(bufferCapacity);
-    ByteBuffer buffer2 = bufferManager.allocate(bufferCapacity);
-    assertThat(buffer1.capacity(), is(bufferCapacity));
-    assertThat(buffer2.capacity(), is(bufferCapacity));
+    ManagedByteBuffer buffer1 = bufferManager.allocateManaged(bufferCapacity);
+    ManagedByteBuffer buffer2 = bufferManager.allocateManaged(bufferCapacity);
+    assertThat(buffer1.getBuffer().capacity(), is(bufferCapacity));
+    assertThat(buffer2.getBuffer().capacity(), is(bufferCapacity));
 
     Latch latch = new Latch();
     Reference<Boolean> maxMemoryExhausted = new Reference<>(false);
@@ -163,12 +159,12 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
     assertThat(latch.await(waitTimeoutMillis * 2, MILLISECONDS), is(false));
     assertThat(maxMemoryExhausted.get(), is(true));
 
-    bufferManager.deallocate(buffer1);
+    buffer1.deallocate();
 
     Latch secondLatch = new Latch();
     new Thread(() -> {
       try {
-        bufferManager.allocate(bufferCapacity);
+        bufferManager.allocateManaged(bufferCapacity);
         maxMemoryExhausted.set(false);
       } finally {
         secondLatch.release();
@@ -180,11 +176,11 @@ public class PoolingByteBufferManagerTestCase extends AbstractMuleTestCase {
   }
 
   private void assertCapacity(int capacity) {
-    ByteBuffer buffer = bufferManager.allocate(capacity);
+    ManagedByteBuffer buffer = bufferManager.allocateManaged(capacity);
     try {
-      assertThat(buffer.capacity(), is(capacity));
+      assertThat(buffer.getBuffer().capacity(), is(capacity));
     } finally {
-      bufferManager.deallocate(buffer);
+      buffer.deallocate();
     }
   }
 }

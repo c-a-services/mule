@@ -7,6 +7,7 @@
 package org.mule.tck.core.streaming;
 
 import org.mule.runtime.core.api.streaming.bytes.ByteBufferManager;
+import org.mule.runtime.core.api.streaming.bytes.ManagedByteBuffer;
 
 import java.nio.ByteBuffer;
 
@@ -32,5 +33,23 @@ public class SimpleByteBufferManager implements ByteBufferManager {
   @Override
   public void deallocate(ByteBuffer byteBuffer) {
 
+  }
+
+  @Override
+  public ManagedByteBuffer allocateManaged(int capacity) {
+    return new ManagedByteBuffer() {
+
+      private ByteBuffer buffer = allocate(capacity);
+
+      @Override
+      public ByteBuffer getBuffer() {
+        return buffer;
+      }
+
+      @Override
+      public void deallocate() {
+        buffer = null;
+      }
+    };
   }
 }

@@ -10,6 +10,7 @@ import static java.nio.channels.Channels.newChannel;
 import static org.mule.runtime.api.util.Preconditions.checkState;
 import static org.slf4j.LoggerFactory.getLogger;
 import org.mule.runtime.core.api.streaming.bytes.ByteBufferManager;
+import org.mule.runtime.core.api.streaming.bytes.ManagedByteBuffer;
 import org.mule.runtime.core.internal.streaming.AbstractStreamingBuffer;
 
 import java.io.IOException;
@@ -138,9 +139,9 @@ public abstract class AbstractInputStreamBuffer extends AbstractStreamingBuffer 
     return result;
   }
 
-  protected boolean deallocate(ByteBuffer byteBuffer) {
+  protected boolean deallocate(ManagedByteBuffer byteBuffer) {
     if (byteBuffer != null) {
-      closeSafely(() -> bufferManager.deallocate(byteBuffer));
+      byteBuffer.deallocate();
       return true;
     }
 
