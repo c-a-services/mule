@@ -247,13 +247,7 @@ public class HeisenbergSource extends Source<String, Object> {
   public void onStop() {
     if (executor != null) {
       scheduledFuture.cancel(true);
-      try {
-        executor.awaitTermination(100, MILLISECONDS);
-      } catch (InterruptedException e) {
-        Logger.getLogger(HeisenbergSource.configName).info(String.format("Execution termination threw {}", e.getMessage()));
-      } finally {
-        executor.stop();
-      }
+      executor.shutdownNow();
     }
 
     if (connection != null) {
