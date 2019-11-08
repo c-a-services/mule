@@ -25,6 +25,7 @@ import org.mule.runtime.core.api.util.func.CheckedRunnable;
 import org.mule.runtime.core.internal.streaming.DefaultMemoryManager;
 import org.mule.runtime.core.internal.streaming.MemoryManager;
 
+import cn.danielw.fop.PoolConfig;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -212,6 +213,16 @@ public class PoolingByteBufferManager implements ByteBufferManager, Disposable {
 
     private BufferPool(int bufferCapacity) {
       this.bufferCapacity = bufferCapacity;
+
+      PoolConfig config = new PoolConfig();
+      config.setPartitionSize(5);
+      config.setMaxSize(10);
+      config.setMinSize(5);
+      config.setMaxIdleMilliseconds(60 * 1000 * 5);
+
+      cn.danielw.fop.ObjectPool newPool = new ObjectPool<>();
+      newPool.borrowObject()
+
       GenericObjectPoolConfig config = new GenericObjectPoolConfig();
       config.setMaxIdle(MAX_IDLE);
       config.setMaxTotal(-1);
