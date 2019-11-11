@@ -54,7 +54,7 @@ public class SimpleByteBufferManager implements ByteBufferManager {
         return Long.valueOf(maxMemoryProperty);
       } catch (Exception e) {
         throw new IllegalArgumentException(format("Invalid value for system property '%s'. A memory size (in bytes) was "
-                                                      + "expected, got '%s' instead",
+            + "expected, got '%s' instead",
                                                   MULE_STREAMING_MAX_MEMORY, maxMemoryProperty));
       }
     }
@@ -71,8 +71,8 @@ public class SimpleByteBufferManager implements ByteBufferManager {
 
     streamingMemory.addAndGet(-capacity);
     throw new MaxStreamingMemoryExceededException(createStaticMessage(format(
-        "Max streaming memory limit of %d bytes was exceeded",
-        maxStreamingMemory)));
+                                                                             "Max streaming memory limit of %d bytes was exceeded",
+                                                                             maxStreamingMemory)));
   }
 
   /**
