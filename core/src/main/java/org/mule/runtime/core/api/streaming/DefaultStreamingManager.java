@@ -31,6 +31,7 @@ import org.mule.runtime.core.api.streaming.bytes.ByteStreamingManager;
 import org.mule.runtime.core.api.streaming.object.ObjectStreamingManager;
 import org.mule.runtime.core.internal.streaming.AtomicStreamingStatistics;
 import org.mule.runtime.core.internal.streaming.CursorManager;
+import org.mule.runtime.core.internal.streaming.DefaultMemoryManager;
 import org.mule.runtime.core.internal.streaming.ManagedCursorProvider;
 import org.mule.runtime.core.internal.streaming.MutableStreamingStatistics;
 import org.mule.runtime.core.internal.streaming.NullStreamingStatistics;
@@ -83,7 +84,7 @@ public class DefaultStreamingManager implements StreamingManager, Initialisable,
 
       cursorManager = new CursorManager(statistics, ghostBuster);
       //bufferManager = new PoolingByteBufferManager(allocationScheduler);
-      bufferManager = new SimpleByteBufferManager();
+      bufferManager = new SimpleByteBufferManager(new DefaultMemoryManager());
       byteStreamingManager = createByteStreamingManager();
       objectStreamingManager = createObjectStreamingManager();
 
