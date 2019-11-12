@@ -25,7 +25,7 @@ import java.util.Set;
  */
 public class DefaultEventContextService implements EventContextService {
 
-  private Set<DefaultEventContext> currentContexts = newKeySet(512);
+  private final Set<DefaultEventContext> currentContexts = newKeySet(512);
 
   @Override
   public List<FlowStackEntry> getCurrentlyActiveFlowStacks() {
