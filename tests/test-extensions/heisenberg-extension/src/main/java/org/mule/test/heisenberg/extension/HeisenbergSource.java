@@ -272,7 +272,7 @@ public class HeisenbergSource extends Source<String, Object> {
     SUCCESS, ERROR_INVOKE, ERROR_BODY, NONE
   }
 
-  public static void resetHeisenbergSource() {
+  public synchronized static void resetHeisenbergSource() {
     receivedGroupOnSource = false;
     receivedInlineOnSuccess = false;
     receivedInlineOnError = false;

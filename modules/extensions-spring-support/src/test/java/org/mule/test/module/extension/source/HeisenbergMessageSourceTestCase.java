@@ -81,7 +81,7 @@ public class HeisenbergMessageSourceTestCase extends AbstractExtensionFunctional
   @Override
   protected void doSetUp() throws Exception {
     sourceTimesStarted = 0;
-    reset();
+    HeisenbergSource.resetHeisenbergSource();
     super.doSetUp();
   }
 
@@ -92,21 +92,9 @@ public class HeisenbergMessageSourceTestCase extends AbstractExtensionFunctional
     }
 
     super.doTearDown();
-    reset();
+    HeisenbergSource.resetHeisenbergSource();
   }
 
-  private void reset() {
-    HeisenbergSource.receivedGroupOnSource = false;
-    HeisenbergSource.receivedInlineOnError = false;
-    HeisenbergSource.receivedInlineOnSuccess = false;
-    HeisenbergSource.executedOnSuccess = false;
-    HeisenbergSource.executedOnError = false;
-    HeisenbergSource.executedOnTerminate = false;
-    HeisenbergSource.error = Optional.empty();
-    HeisenbergSource.gatheredMoney = 0;
-    HeisenbergSource.configName = null;
-    HeisenbergSource.location = null;
-  }
 
   @Test
   public void source() throws Exception {
