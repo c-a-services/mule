@@ -87,7 +87,7 @@ import javax.inject.Inject;
 @Deprecated(message = "This source is being tapped by the DEA, it's usage is discouraged.", since = "1.6.0", toRemoveIn = "3.0.0")
 public class HeisenbergSource extends Source<String, Object> {
 
-  public static final Logger LOGGER = LoggerFactory.getLogger(HeisenbergSource.configName);
+  public static final Logger LOGGER = LoggerFactory.getLogger(HeisenbergSource.class);
   public static final String CORE_POOL_SIZE_ERROR_MESSAGE = "corePoolSize cannot be a negative value";
   public static final String INITIAL_BATCH_NUMBER_ERROR_MESSAGE = "initialBatchNumber cannot be a negative value";
   private static final String BATCH_NUMBER = "batchNumber";
