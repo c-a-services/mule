@@ -30,6 +30,9 @@ import static org.mule.test.heisenberg.extension.HeisenbergSource.TerminateStatu
 import static org.mule.test.heisenberg.extension.HeisenbergSource.TerminateStatus.NONE;
 import static org.mule.test.heisenberg.extension.HeisenbergSource.TerminateStatus.SUCCESS;
 
+import org.slf4j.Logger;
+import org.junit.After;
+import org.junit.Before;
 import org.mule.runtime.api.component.location.ComponentLocation;
 import org.mule.runtime.api.connection.ConnectionException;
 import org.mule.runtime.api.connection.ConnectionProvider;
@@ -86,6 +89,7 @@ import javax.inject.Inject;
 @Deprecated(message = "This source is being tapped by the DEA, it's usage is discouraged.", since = "1.6.0", toRemoveIn = "3.0.0")
 public class HeisenbergSource extends Source<String, Object> {
 
+  public static final Logger LOGGER = LoggerFactory.getLogger(HeisenbergSource.configName);
   public static final String CORE_POOL_SIZE_ERROR_MESSAGE = "corePoolSize cannot be a negative value";
   public static final String INITIAL_BATCH_NUMBER_ERROR_MESSAGE = "initialBatchNumber cannot be a negative value";
   private static final String BATCH_NUMBER = "batchNumber";
@@ -151,6 +155,29 @@ public class HeisenbergSource extends Source<String, Object> {
   public HeisenbergSource() {
     resetHeisenbergSource();
   }
+
+  @Before
+  public void before() {
+    printAll();
+  }
+
+  @After
+  public void after() {
+    printAll();
+  }
+
+  public void printAll() {
+    LOGGER.info(String.format("receivedGroupOnSource {}",receivedGroupOnSource));
+    LOGGER.info(String.format("receivedInlineOnSuccess {}",receivedInlineOnSuccess));
+    LOGGER.info(String.format("receivedInlineOnError {}",receivedInlineOnError));
+    LOGGER.info(String.format("terminateStatus {}",terminateStatus));
+    LOGGER.info(String.format("error {}",error));
+    LOGGER.info(String.format("executedOnSuccess {}",executedOnSuccess));
+    LOGGER.info(String.format("executedOnError {}",executedOnError));
+    LOGGER.info(String.format("executedOnTerminate {}",executedOnTerminate));
+    LOGGER.info(String.format("gatheredMoney {}",gatheredMoney));
+  }
+
 
   @Override
   public void onStart(SourceCallback<String, Object> sourceCallback) throws MuleException {
