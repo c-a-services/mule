@@ -165,15 +165,15 @@ public class HeisenbergSource extends Source<String, Object> {
   }
 
   public void printAll() {
-    LOGGER.info(format("receivedGroupOnSource %s",receivedGroupOnSource));
-    LOGGER.info(format("receivedInlineOnSuccess %s",receivedInlineOnSuccess));
-    LOGGER.info(format("receivedInlineOnError %s",receivedInlineOnError));
-    LOGGER.info(format("terminateStatus %s",terminateStatus));
+    LOGGER.info(format("receivedGroupOnSource %s", receivedGroupOnSource));
+    LOGGER.info(format("receivedInlineOnSuccess %s", receivedInlineOnSuccess));
+    LOGGER.info(format("receivedInlineOnError %s", receivedInlineOnError));
+    LOGGER.info(format("terminateStatus %s", terminateStatus));
     LOGGER.info(format("error %s", error));
-    LOGGER.info(format("executedOnSuccess %s",executedOnSuccess));
-    LOGGER.info(format("executedOnError %s",executedOnError));
-    LOGGER.info(format("executedOnTerminate %s",executedOnTerminate));
-    LOGGER.info(format("gatheredMoney %d",gatheredMoney));
+    LOGGER.info(format("executedOnSuccess %s", executedOnSuccess));
+    LOGGER.info(format("executedOnError %s", executedOnError));
+    LOGGER.info(format("executedOnTerminate %s", executedOnTerminate));
+    LOGGER.info(format("gatheredMoney %d", gatheredMoney));
   }
 
 
