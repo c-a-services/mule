@@ -165,15 +165,15 @@ public class HeisenbergSource extends Source<String, Object> {
   }
 
   public void printAll() {
-    LOGGER.info(String.format("receivedGroupOnSource {}",receivedGroupOnSource));
-    LOGGER.info(String.format("receivedInlineOnSuccess {}",receivedInlineOnSuccess));
-    LOGGER.info(String.format("receivedInlineOnError {}",receivedInlineOnError));
-    LOGGER.info(String.format("terminateStatus {}",terminateStatus));
-    LOGGER.info(String.format("error {}",error));
-    LOGGER.info(String.format("executedOnSuccess {}",executedOnSuccess));
-    LOGGER.info(String.format("executedOnError {}",executedOnError));
-    LOGGER.info(String.format("executedOnTerminate {}",executedOnTerminate));
-    LOGGER.info(String.format("gatheredMoney {}",gatheredMoney));
+    LOGGER.info(format("receivedGroupOnSource %s",receivedGroupOnSource));
+    LOGGER.info(format("receivedInlineOnSuccess %s",receivedInlineOnSuccess));
+    LOGGER.info(format("receivedInlineOnError %s",receivedInlineOnError));
+    LOGGER.info(format("terminateStatus %s",terminateStatus));
+    LOGGER.info(format("error %s", error));
+    LOGGER.info(format("executedOnSuccess %s",executedOnSuccess));
+    LOGGER.info(format("executedOnError %s",executedOnError));
+    LOGGER.info(format("executedOnTerminate %s",executedOnTerminate));
+    LOGGER.info(format("gatheredMoney %d",gatheredMoney));
   }
 
 
