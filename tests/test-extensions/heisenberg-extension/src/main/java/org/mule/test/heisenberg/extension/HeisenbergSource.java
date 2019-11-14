@@ -74,9 +74,7 @@ import org.mule.test.heisenberg.extension.model.Weapon;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ScheduledFuture;
-import java.util.logging.Logger;
 
 import javax.inject.Inject;
 
