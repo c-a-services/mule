@@ -11,6 +11,7 @@ import static java.util.Objects.requireNonNull;
 import static org.mule.runtime.api.functional.Either.left;
 import static org.mule.runtime.api.functional.Either.right;
 import static reactor.core.publisher.Mono.empty;
+
 import org.mule.runtime.api.functional.Either;
 import org.mule.runtime.api.util.LazyValue;
 import org.mule.runtime.core.api.context.notification.FlowCallStack;
@@ -33,6 +34,7 @@ import java.util.function.Consumer;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 
@@ -72,10 +74,6 @@ abstract class AbstractEventContext implements BaseEventContext {
 
   public AbstractEventContext() {
     this(NULL_EXCEPTION_HANDLER, 0, Optional.empty());
-  }
-
-  public AbstractEventContext(FlowExceptionHandler exceptionHandler) {
-    this(exceptionHandler, 0, Optional.empty());
   }
 
   /**

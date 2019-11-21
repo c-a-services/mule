@@ -22,6 +22,7 @@ import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.event.CoreEvent;
+import org.mule.runtime.core.api.exception.FlowExceptionHandler;
 import org.mule.runtime.core.api.processor.InterceptingMessageProcessor;
 import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
@@ -37,7 +38,6 @@ import java.util.function.Supplier;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 /**
  * <p>
@@ -116,7 +116,7 @@ public class DefaultMessageProcessorChainBuilder extends AbstractMessageProcesso
     } else {
       return new DefaultMessageProcessorChain(name != null ? "(chain) of " + name : "(chain)",
                                               processingStrategyOptional,
-                                              new ArrayList<>(tempList));
+                                              new ArrayList<>(tempList), messagingExceptionHandler);
     }
   }
 
@@ -124,7 +124,7 @@ public class DefaultMessageProcessorChainBuilder extends AbstractMessageProcesso
                                                           List<Processor> processorsForLifecycle) {
     return new InterceptingMessageProcessorChain(name != null ? "(intercepting chain) of " + name : "(intercepting chain)",
                                                  ofNullable(processingStrategy), head,
-                                                 processors, processorsForLifecycle);
+                                                 processors, processorsForLifecycle, messagingExceptionHandler);
   }
 
   @Override
@@ -164,20 +164,23 @@ public class DefaultMessageProcessorChainBuilder extends AbstractMessageProcesso
   protected static class DefaultMessageProcessorChain extends AbstractMessageProcessorChain {
 
     protected DefaultMessageProcessorChain(String name, Optional<ProcessingStrategy> processingStrategyOptional,
-                                           List<Processor> processors) {
-      super(name, processingStrategyOptional, processors);
+                                           List<Processor> processors,
+                                           FlowExceptionHandler messagingExceptionHandler) {
+      super(name, processingStrategyOptional, processors, messagingExceptionHandler);
     }
 
     /**
      * This constructor left for backwards compatibility
      *
-     * @deprecated Use {@link #DefaultMessageProcessorChainBuilder(String, Optional, List)} instead.
+     * @deprecated Use {@link #DefaultMessageProcessorChainBuilder(String, Optional, List, FlowExceptionHandler)} instead.
      */
     @Deprecated
     protected DefaultMessageProcessorChain(String name, Optional<ProcessingStrategy> processingStrategyOptional, Processor head,
                                            List<Processor> processors,
                                            List<Processor> processorsForLifecycle) {
-      super(name, processingStrategyOptional, processors);
+      super(name, processingStrategyOptional, processors,
+            // just let the error be propagated to the outer chain...
+            (exception, event) -> null);
     }
   }
 
@@ -189,8 +192,9 @@ public class DefaultMessageProcessorChainBuilder extends AbstractMessageProcesso
     protected InterceptingMessageProcessorChain(String name, Optional<ProcessingStrategy> processingStrategyOptional,
                                                 Processor head,
                                                 List<Processor> processors,
-                                                List<Processor> processorsForLifecycle) {
-      super(name, processingStrategyOptional, processors);
+                                                List<Processor> processorsForLifecycle,
+                                                FlowExceptionHandler messagingExceptionHandler) {
+      super(name, processingStrategyOptional, processors, messagingExceptionHandler);
       this.head = head;
       this.processorsForLifecycle = processorsForLifecycle;
     }
@@ -219,13 +223,16 @@ public class DefaultMessageProcessorChainBuilder extends AbstractMessageProcesso
   public static MessageProcessorChain newLazyProcessorChainBuilder(AbstractMessageProcessorChainBuilder chainBuilder,
                                                                    MuleContext muleContext,
                                                                    Supplier<ProcessingStrategy> processingStrategySupplier) {
-    return new AbstractMessageProcessorChain(chainBuilder.name, empty(), chainBuilder.processors) {
+    return new AbstractMessageProcessorChain(chainBuilder.name, empty(), chainBuilder.processors,
+                                             // just let the error be propagated to the outer chain...
+                                             (exception, event) -> null) {
 
       private MessageProcessorChain delegate;
 
       @Override
       public void initialise() throws InitialisationException {
         chainBuilder.setProcessingStrategy(processingStrategySupplier.get());
+        chainBuilder.setMessagingExceptionHandler(getMessagingExceptionHandler());
         delegate = chainBuilder.build();
         delegate.setAnnotations(getAnnotations());
         initialiseIfNeeded(delegate, muleContext);

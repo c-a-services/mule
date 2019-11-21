@@ -8,7 +8,6 @@ package org.mule.runtime.core.internal.processor;
 
 import static java.util.Collections.singletonList;
 import static java.util.Optional.of;
-import static java.util.Optional.ofNullable;
 import static org.mule.runtime.core.api.config.i18n.CoreMessages.errorInvokingMessageProcessorWithinTransaction;
 import static org.mule.runtime.core.api.execution.TransactionalExecutionTemplate.createScopeTransactionalExecutionTemplate;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
@@ -19,10 +18,8 @@ import static org.mule.runtime.core.api.transaction.TransactionConfig.ACTION_ALW
 import static org.mule.runtime.core.api.transaction.TransactionConfig.ACTION_BEGIN_OR_JOIN;
 import static org.mule.runtime.core.api.transaction.TransactionConfig.ACTION_INDIFFERENT;
 import static org.mule.runtime.core.api.transaction.TransactionCoordination.isTransactionActive;
-import static org.mule.runtime.core.privileged.processor.MessageProcessors.applyWithChildContext;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.buildNewChainWithListOfProcessors;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.getProcessingStrategy;
-import static org.mule.runtime.core.privileged.processor.MessageProcessors.processWithChildContextBlocking;
 import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.publisher.Flux.from;
 
@@ -80,10 +77,9 @@ public class TryScope extends AbstractMessageProcessorOwner implements Scope {
       if ((!txPrevoiuslyActive && isTransactionActive()) || (txPrevoiuslyActive && previousTx != currentTx)) {
         TransactionAdapter transaction = (TransactionAdapter) currentTx;
         transaction.setComponentLocation(getLocation());
-        return processWithChildContextBlocking(event, nestedChain, ofNullable(getLocation()), messagingExceptionHandler);
       } else {
-        return processWithChildContextBlocking(event, nestedChain, ofNullable(getLocation()), messagingExceptionHandler);
       }
+      return nestedChain.process(event);
     };
 
     try {
@@ -102,8 +98,7 @@ public class TryScope extends AbstractMessageProcessorOwner implements Scope {
     } else if (isTransactionActive() || transactionConfig.getAction() != ACTION_INDIFFERENT) {
       return Scope.super.apply(publisher);
     } else {
-      return from(publisher)
-          .transform(event -> applyWithChildContext(event, nestedChain, ofNullable(getLocation()), messagingExceptionHandler));
+      return from(publisher).transform(nestedChain);
     }
   }
 
@@ -145,7 +140,6 @@ public class TryScope extends AbstractMessageProcessorOwner implements Scope {
 
   @Override
   public void initialise() throws InitialisationException {
-    this.nestedChain = buildNewChainWithListOfProcessors(getProcessingStrategy(locator, getRootContainerLocation()), processors);
     if (messagingExceptionHandler == null) {
       messagingExceptionHandler = muleContext.getDefaultErrorHandler(of(getRootContainerLocation().toString()));
       if (messagingExceptionHandler instanceof ErrorHandler) {
@@ -154,6 +148,8 @@ public class TryScope extends AbstractMessageProcessorOwner implements Scope {
         errorHandler.setExceptionListenersLocation(location);
       }
     }
+    this.nestedChain = buildNewChainWithListOfProcessors(getProcessingStrategy(locator, getRootContainerLocation()), processors,
+                                                         messagingExceptionHandler);
     initialiseIfNeeded(messagingExceptionHandler, true, muleContext);
     super.initialise();
   }

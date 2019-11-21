@@ -94,7 +94,7 @@ public class SubflowMessageProcessorChainBuilder extends DefaultMessageProcessor
     private final String subFlowName;
 
     SubFlowMessageProcessorChain(String name, List<Processor> processors) {
-      super(name, empty(), processors);
+      super(name, empty(), processors, null);
       this.subFlowName = name;
     }
 

@@ -21,6 +21,7 @@ import static org.mule.runtime.core.internal.event.EventQuickCopy.quickCopy;
 import static org.mule.runtime.core.internal.util.rx.Operators.outputToTarget;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.applyWithChildContext;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processWithChildContext;
+import static org.mule.runtime.core.privileged.processor.MessageProcessors.processWithChildContextDontComplete;
 import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.Exceptions.propagate;
 import static reactor.core.publisher.Flux.error;
@@ -478,9 +479,8 @@ public class FlowRefFactoryBean extends AbstractComponentFactory<Processor> impl
                                                                         Optional<Flow> targetAsFlow) {
       Optional<ComponentLocation> componentLocation = ofNullable(DynamicFlowRefMessageProcessor.this.getLocation());
       if (targetAsFlow.isPresent()) {
-        return processWithChildContext(event, decoratedTarget,
-                                       componentLocation,
-                                       targetAsFlow.get().getExceptionListener());
+        return processWithChildContextDontComplete(event, decoratedTarget, componentLocation,
+                                                   targetAsFlow.get().getExceptionListener());
       } else {
         // If the resolved target is not a flow, it should be a subflow
         return processWithChildContext(event, decoratedTarget, componentLocation);
