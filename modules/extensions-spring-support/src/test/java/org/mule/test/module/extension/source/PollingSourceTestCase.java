@@ -13,19 +13,22 @@ import static org.mule.test.petstore.extension.NumberPetAdoptionSource.ALL_NUMBE
 import static org.mule.test.petstore.extension.PetAdoptionSource.ALL_PETS;
 import static org.mule.test.petstore.extension.PetAdoptionSource.FAILED_ADOPTION_COUNT;
 
-import org.junit.Ignore;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.Startable;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.processor.Processor;
+import org.mule.tck.junit4.FlakinessDetectorTestRunner;
+import org.mule.tck.junit4.FlakyTest;
 import org.mule.test.module.extension.AbstractExtensionFunctionalTestCase;
 import org.mule.test.petstore.extension.PetAdoptionSource;
+import org.mule.test.runner.RunnerDelegateTo;
 
 import java.util.LinkedList;
 import java.util.List;
 
 import org.junit.Test;
 
+@RunnerDelegateTo(FlakinessDetectorTestRunner.class)
 public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
 
   private static final List<CoreEvent> ADOPTION_EVENTS = new LinkedList<>();
@@ -53,7 +56,7 @@ public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
   }
 
   @Test
-  @Ignore("MULE-17580")
+  @FlakyTest(times = 100)
   public void vanillaPoll() throws Exception {
     startFlow("vanilla");
     assertAllPetsAdopted();
