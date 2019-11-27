@@ -8,6 +8,7 @@ package org.mule.runtime.core.internal.processor;
 
 import static java.util.Collections.singletonList;
 import static java.util.Optional.of;
+import static org.mule.runtime.api.component.location.Location.builderFromStringRepresentation;
 import static org.mule.runtime.core.api.config.i18n.CoreMessages.errorInvokingMessageProcessorWithinTransaction;
 import static org.mule.runtime.core.api.execution.TransactionalExecutionTemplate.createScopeTransactionalExecutionTemplate;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
@@ -23,7 +24,6 @@ import static org.mule.runtime.core.privileged.processor.MessageProcessors.getPr
 import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.publisher.Flux.from;
 
-import org.mule.runtime.api.component.location.Location;
 import org.mule.runtime.api.exception.DefaultMuleException;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.InitialisationException;
@@ -143,9 +143,8 @@ public class TryScope extends AbstractMessageProcessorOwner implements Scope {
     if (messagingExceptionHandler == null) {
       messagingExceptionHandler = muleContext.getDefaultErrorHandler(of(getRootContainerLocation().toString()));
       if (messagingExceptionHandler instanceof ErrorHandler) {
-        ErrorHandler errorHandler = (ErrorHandler) messagingExceptionHandler;
-        Location location = Location.builderFromStringRepresentation(this.getLocation().getLocation()).build();
-        errorHandler.setExceptionListenersLocation(location);
+        ((ErrorHandler) messagingExceptionHandler)
+            .setExceptionListenersLocation(builderFromStringRepresentation(this.getLocation().getLocation()).build());
       }
     }
     this.nestedChain = buildNewChainWithListOfProcessors(getProcessingStrategy(locator, getRootContainerLocation()), processors,
