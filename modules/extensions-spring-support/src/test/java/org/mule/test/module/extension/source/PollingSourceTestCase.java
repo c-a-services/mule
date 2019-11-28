@@ -61,7 +61,7 @@ public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
     startFlow("vanilla");
     assertAllPetsAdopted();
 
-    check(7000, 200, () -> {
+    check(8000, 200, () -> {
       synchronized (ADOPTION_EVENTS) {
         return PetAdoptionSource.COMPLETED_POLLS > 1 &&
             PetAdoptionSource.ADOPTED_PET_COUNT >= ADOPTION_EVENTS.size();
