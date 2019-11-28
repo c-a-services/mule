@@ -8,7 +8,7 @@ Map pipelineParams = ["upstreamProjects"                       : UPSTREAM_PROJEC
                       // Comment public setting to get oldMuleArtifact 4.1.6 from private repo till we move them to the public Repo
                       // Uncomment it after they are copied
                       // "mavenSettingsXmlId" : "mule-runtime-maven-settings-MuleSettings",
-                      "mavenAdditionalArgs"                    : "-Djava.net.preferIPv4Stack=true -p :mule-module-extensions-spring-support -Dtest='*PollingSourceTestCase'",
+                      "mavenAdditionalArgs"                    : "-Djava.net.preferIPv4Stack=true -pl :mule-module-extensions-spring-support -Dtest=PollingSourceTestCase",
                       "mavenCompileGoal"                       : "clean install -U -DskipTests -DskipITs -Dinvoker.skip=true -Darchetype.test.skip -Dmaven.javadoc.skip",
 
                       enableMavenCompileStage                  : false,
