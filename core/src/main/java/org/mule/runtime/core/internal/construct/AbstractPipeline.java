@@ -41,6 +41,8 @@ import org.mule.runtime.core.api.config.i18n.CoreMessages;
 import org.mule.runtime.core.api.connector.ConnectException;
 import org.mule.runtime.core.api.construct.BackPressureReason;
 import org.mule.runtime.core.api.construct.Pipeline;
+import org.mule.runtime.core.api.context.notification.FlowCallStack;
+import org.mule.runtime.core.api.context.notification.FlowStackElement;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.exception.Errors;
 import org.mule.runtime.core.api.exception.FlowExceptionHandler;
@@ -54,6 +56,7 @@ import org.mule.runtime.core.api.processor.strategy.ProcessingStrategyFactory;
 import org.mule.runtime.core.api.source.MessageSource;
 import org.mule.runtime.core.api.util.func.CheckedRunnable;
 import org.mule.runtime.core.internal.context.MuleContextWithRegistry;
+import org.mule.runtime.core.internal.context.notification.DefaultFlowCallStack;
 import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.message.ErrorBuilder;
 import org.mule.runtime.core.internal.processor.strategy.DirectProcessingStrategyFactory;
@@ -69,10 +72,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -82,6 +87,9 @@ import reactor.core.publisher.Mono;
  * If no message processors are configured then the source message is simply returned.
  */
 public abstract class AbstractPipeline extends AbstractFlowConstruct implements Pipeline {
+
+  private static final String KEY_ON_NEXT_ERROR_STRATEGY = "reactor.onNextError.localStrategy";
+  private static final String ON_NEXT_FAILURE_STRATEGY = "reactor.core.publisher.OnNextFailureStrategy$ResumeStrategy";
 
   private final NotificationDispatcher notificationFirer;
 
@@ -228,14 +236,35 @@ public abstract class AbstractPipeline extends AbstractFlowConstruct implements 
     initialiseIfNeeded(pipeline, muleContext);
   }
 
-  /*
+  /**
    * Processor that dispatches incoming source Events to the internal pipeline the Sink. The way in which the Event is dispatched
    * and how overload is handled depends on the Source back-pressure strategy.
+   *
+   * @return the into-flow dispatching {@link ReactiveProcessor}
    */
   private ReactiveProcessor dispatchToFlow() {
     return publisher -> from(publisher)
         .doOnNext(assertStarted())
-        .flatMap(routeThroughProcessingStrategy());
+        .flatMap(routeThroughProcessingStrategy())
+        // This replaces the onErrorContinue key if it exists, to prevent it from being propagated within the flow
+        .compose(clearSubscribersErrorStrategy());
+  }
+
+  /**
+   * If an <b>Error Strategy</b> is being propagated in the subscription {@link reactor.util.context.Context}, clear it.
+   *
+   * @return the transformed flux that clears the context if necessary
+   */
+  private Function<Flux<CoreEvent>, Publisher<CoreEvent>> clearSubscribersErrorStrategy() {
+    return pub -> pub.subscriberContext(context -> {
+      Optional<Object> onErrorStrategy = context.getOrEmpty(KEY_ON_NEXT_ERROR_STRATEGY);
+      if (onErrorStrategy.isPresent()
+          && onErrorStrategy.get().toString().contains(ON_NEXT_FAILURE_STRATEGY)) {
+        BiFunction<Throwable, Object, Throwable> onErrorContinue = (e, o) -> null;
+        return context.put(KEY_ON_NEXT_ERROR_STRATEGY, onErrorContinue);
+      }
+      return context;
+    });
   }
 
   protected Function<CoreEvent, Publisher<? extends CoreEvent>> routeThroughProcessingStrategy() {
@@ -314,6 +343,11 @@ public abstract class AbstractPipeline extends AbstractFlowConstruct implements 
       if (getStatistics().isEnabled()) {
         getStatistics().incReceivedEvents();
       }
+
+      FlowCallStack flowCallStack = event.getFlowCallStack();
+      if (flowCallStack instanceof DefaultFlowCallStack) {
+        ((DefaultFlowCallStack) flowCallStack).push(new FlowStackElement(AbstractPipeline.this.getName(), null));
+      }
       notificationFirer.dispatch(new PipelineMessageNotification(createInfo(event, null, AbstractPipeline.this),
                                                                  AbstractPipeline.this.getName(), PROCESS_START));
 
@@ -339,6 +373,10 @@ public abstract class AbstractPipeline extends AbstractFlowConstruct implements 
   }
 
   private void fireCompleteNotification(CoreEvent event, MessagingException messagingException) {
+    FlowCallStack flowCallStack = event.getFlowCallStack();
+    if (flowCallStack instanceof DefaultFlowCallStack) {
+      ((DefaultFlowCallStack) flowCallStack).pop();
+    }
     notificationFirer.dispatch(new PipelineMessageNotification(createInfo(event, messagingException, AbstractPipeline.this),
                                                                AbstractPipeline.this.getName(), PROCESS_COMPLETE));
   }
@@ -451,6 +489,7 @@ public abstract class AbstractPipeline extends AbstractFlowConstruct implements 
   protected void doDispose() {
     disposeIfDisposable(pipeline);
     disposeIfDisposable(source);
+    disposeIfDisposable(processingStrategy);
     super.doDispose();
   }
 

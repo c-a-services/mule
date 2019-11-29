@@ -10,25 +10,13 @@ import org.mule.runtime.core.api.streaming.bytes.ByteBufferManager;
 
 import java.nio.ByteBuffer;
 
-/**
- * Simple implementation of {@link ByteBufferManager}
- *
- * @since 4.0
- */
-public class SimpleByteBufferManager implements ByteBufferManager {
+public class DummyByteBufferManager implements ByteBufferManager {
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public ByteBuffer allocate(int capacity) {
     return ByteBuffer.allocate(capacity);
   }
 
-  /**
-   * No - Op operation
-   * {@inheritDoc}
-   */
   @Override
   public void deallocate(ByteBuffer byteBuffer) {
 

@@ -8,6 +8,8 @@ package org.mule.runtime.core.internal.execution;
 
 import static java.util.Collections.emptyMap;
 import static org.mule.runtime.api.component.execution.CompletableCallback.always;
+import static org.mule.runtime.api.functional.Either.left;
+import static org.mule.runtime.api.functional.Either.right;
 import static org.mule.runtime.api.metadata.MediaType.ANY;
 import static org.mule.runtime.api.notification.ConnectorMessageNotification.MESSAGE_ERROR_RESPONSE;
 import static org.mule.runtime.api.notification.ConnectorMessageNotification.MESSAGE_RECEIVED;
@@ -19,8 +21,6 @@ import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Ha
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Handleable.SOURCE_RESPONSE_GENERATE;
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Handleable.SOURCE_RESPONSE_SEND;
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Unhandleable.FLOW_BACK_PRESSURE;
-import static org.mule.runtime.core.api.functional.Either.left;
-import static org.mule.runtime.core.api.functional.Either.right;
 import static org.mule.runtime.core.internal.message.ErrorBuilder.builder;
 import static org.mule.runtime.core.internal.util.FunctionalUtils.safely;
 import static org.mule.runtime.core.internal.util.InternalExceptionUtils.createErrorEvent;
@@ -31,9 +31,6 @@ import static org.mule.runtime.core.privileged.processor.MessageProcessors.apply
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processToApply;
 import static org.slf4j.LoggerFactory.getLogger;
 import static reactor.core.publisher.Flux.from;
-import static reactor.core.publisher.Mono.empty;
-import static reactor.core.publisher.Mono.just;
-
 import org.mule.runtime.api.component.Component;
 import org.mule.runtime.api.component.execution.CompletableCallback;
 import org.mule.runtime.api.component.location.ComponentLocation;
@@ -42,6 +39,7 @@ import org.mule.runtime.api.exception.DefaultMuleException;
 import org.mule.runtime.api.exception.ErrorTypeRepository;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
+import org.mule.runtime.api.functional.Either;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.message.ErrorType;
@@ -53,7 +51,6 @@ import org.mule.runtime.core.api.construct.FlowConstruct;
 import org.mule.runtime.core.api.context.notification.NotificationHelper;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.exception.NullExceptionHandler;
-import org.mule.runtime.core.api.functional.Either;
 import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
 import org.mule.runtime.core.api.rx.Exceptions;
@@ -176,6 +173,9 @@ public class FlowProcessMediator implements Initialisable {
             .resolve(new MessagingException(event, e), muleContext),
                                              template.getFailedExecutionResponseParametersFunction().apply(event),
                                              always(() -> phaseResultNotifier.phaseFailure(e)));
+
+        ((BaseEventContext) event.getContext()).error(e);
+        responseCompletion.complete(null);
       }
     } catch (Exception e) {
       phaseResultNotifier.phaseFailure(e);
@@ -207,6 +207,7 @@ public class FlowProcessMediator implements Initialisable {
     } catch (Exception e) {
       e = (Exception) Exceptions.unwrap(e);
       if (e instanceof FlowBackPressureException) {
+        ((BaseEventContext) ctx.event.getContext()).error(e);
         ctx.result = mapBackPressureExceptionToPolicyFailureResult(ctx.template, ctx.event, (FlowBackPressureException) e);
         dispatchResponse(ctx);
       } else {
@@ -232,15 +233,15 @@ public class FlowProcessMediator implements Initialisable {
   }
 
   /**
-   * Notifies the {@link FlowConstruct} response listening party of the backpressure signal raised when trying to inject the
-   * event for processing into the {@link ProcessingStrategy}.
+   * Notifies the {@link FlowConstruct} response listening party of the backpressure signal raised when trying to inject the event
+   * for processing into the {@link ProcessingStrategy}.
    * <p>
    * By wrapping the thrown backpressure exception in an {@link Either} which contains the {@link SourcePolicyFailureResult}, one
    * can consider as if the backpressure signal was fired from inside the policy + flow execution chain, and reuse all handling
    * logic.
    *
    * @param template the processing template being used
-   * @param event    the event that caused the backpressure signal to be fired
+   * @param event the event that caused the backpressure signal to be fired
    * @return an exception mapper that notifies the {@link FlowConstruct} response listener of the backpressure signal
    */
   protected Either<SourcePolicyFailureResult, SourcePolicySuccessResult> mapBackPressureExceptionToPolicyFailureResult(
@@ -345,26 +346,25 @@ public class FlowProcessMediator implements Initialisable {
     MessagingException messagingException =
         see.toMessagingException(ctx.flowConstruct.getMuleContext().getExceptionContextProviders(), ctx.messageSource);
 
-    just(messagingException)
-        .flatMapMany(ctx.flowConstruct.getExceptionListener())
-        .last()
-        .onErrorResume(e -> empty())
-        .doAfterTerminate(() -> sendErrorResponse(messagingException, successResult.createErrorResponseParameters(), ctx,
-                                                  new CompletableCallback<Void>() {
+    Runnable terminationCallback =
+        () -> sendErrorResponse(messagingException, successResult.createErrorResponseParameters(), ctx,
+                                new CompletableCallback<Void>() {
 
-                                                    @Override
-                                                    public void complete(Void value) {
-                                                      onTerminate(ctx, left(messagingException));
-                                                      finish(ctx);
-                                                    }
+                                  @Override
+                                  public void complete(Void value) {
+                                    onTerminate(ctx, left(messagingException));
+                                    finish(ctx);
+                                  }
 
-                                                    @Override
-                                                    public void error(Throwable e) {
-                                                      ctx.exception = e;
-                                                      finish(ctx);
-                                                    }
-                                                  }))
-        .subscribe();
+                                  @Override
+                                  public void error(Throwable e) {
+                                    ctx.exception = e;
+                                    finish(ctx);
+                                  }
+                                });
+
+    ctx.flowConstruct.getExceptionListener().routeError(messagingException, event -> terminationCallback.run(),
+                                                        error -> terminationCallback.run());
   }
 
   /**
@@ -471,10 +471,10 @@ public class FlowProcessMediator implements Initialisable {
   /**
    * This method will not throw any {@link Exception}.
    *
-   * @param ctx    the {@link PhaseContext}
+   * @param ctx the {@link PhaseContext}
    * @param result the outcome of trying to send the response of the source through the source. In the case of error, only
-   *               {@link MessagingException} or {@link SourceErrorException} are valid values on the {@code left} side of this
-   *               parameter.
+   *        {@link MessagingException} or {@link SourceErrorException} are valid values on the {@code left} side of this
+   *        parameter.
    */
   private void onTerminate(PhaseContext ctx, Either<Throwable, CoreEvent> result) {
     safely(() -> ctx.terminateConsumer.accept(result.mapLeft(throwable -> {
