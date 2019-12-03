@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.mule.distributions</groupId>
         <artifactId>mule-distributions</artifactId>
-        <version>3.9.4-SNAPSHOT</version>
+        <version>3.9.4</version>
     </parent>
     <artifactId>mule-standalone</artifactId>
     <!-- Packaging 'pom' ensures that maven does not try to bind a plugin to the
@@ -16,7 +16,7 @@
     <description>Includes the Mule server with all of its modules and transports.</description>
 
     <properties>
-        <apikit.version>3.9.4-SNAPSHOT</apikit.version>
+        <apikit.version>3.9.4</apikit.version>
     </properties>
 
     <build>
@@ -277,7 +277,7 @@
         <dependency>
             <groupId>org.mule.tools</groupId>
             <artifactId>mule-tools-anttasks</artifactId>
-            <version>${project.version}</version>
+            <version>3.9.3</version>
             <type>jar</type>
         </dependency>
 
