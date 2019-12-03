@@ -27,12 +27,15 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RunnerDelegateTo(FlakinessDetectorTestRunner.class)
 public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
 
   private static final List<CoreEvent> ADOPTION_EVENTS = new LinkedList<>();
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(PollingSourceTestCase.class);
 
   public static class AdoptionProcessor implements Processor {
 
@@ -40,6 +43,8 @@ public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
     public CoreEvent process(CoreEvent event) throws MuleException {
       synchronized (ADOPTION_EVENTS) {
         ADOPTION_EVENTS.add(event);
+        LOGGER.debug("[GUSTAVO]: {} ==== {}", "Event added to the Adoption Events list",
+                     event.getMessage().getPayload().getValue().toString());
       }
       return event;
     }
@@ -48,6 +53,7 @@ public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
   @Override
   protected void doTearDown() throws Exception {
     ADOPTION_EVENTS.clear();
+    LOGGER.debug("[GUSTAVO]: {} ==== {}", "Adoption events list cleaned", "");
   }
 
   @Override
@@ -56,15 +62,20 @@ public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
   }
 
   @Test
-  @FlakyTest(times = 100)
+  @FlakyTest(times = 3)
   public void vanillaPoll() throws Exception {
+    LOGGER.debug("[GUSTAVO]: {} ==== {}", "Starting vanilla flow", "");
     startFlow("vanilla");
     assertAllPetsAdopted();
+    LOGGER.debug("[GUSTAVO]: {} ==== {}", "After assertAllPetsAdopted()", "");
 
-    check(8000, 200, () -> {
+    check(10000, 200, () -> {
       synchronized (ADOPTION_EVENTS) {
-        return PetAdoptionSource.COMPLETED_POLLS > 1 &&
-            PetAdoptionSource.ADOPTED_PET_COUNT >= ADOPTION_EVENTS.size();
+        LOGGER.debug("[GUSTAVO]: {} ==== {}", "Inside the synchronized block of test method", "");
+        LOGGER.debug("[GUSTAVO]: {} ==== {}", "PetAdoptionSource.COMPLETED_POLLS", PetAdoptionSource.COMPLETED_POLLS);
+        LOGGER.debug("[GUSTAVO]: {} ==== {}", "PetAdoptionSource.ADOPTED_PET_COUNT", PetAdoptionSource.ADOPTED_PET_COUNT);
+        LOGGER.debug("[GUSTAVO]: {} ==== {}\n", "ADOPTION_EVENTS.size()", ADOPTION_EVENTS.size());
+        return PetAdoptionSource.COMPLETED_POLLS > 1 && PetAdoptionSource.ADOPTED_PET_COUNT >= ADOPTION_EVENTS.size();
       }
     });
   }
@@ -128,9 +139,11 @@ public class PollingSourceTestCase extends AbstractExtensionFunctionalTestCase {
   private void assertAllPetsAdopted() {
     check(7000, 100, () -> {
       synchronized (ADOPTION_EVENTS) {
-        return ADOPTION_EVENTS.size() >= ALL_PETS.size() &&
-            ADOPTION_EVENTS.stream().map(e -> e.getMessage().getPayload().getValue().toString()).collect(toList())
-                .containsAll(ALL_PETS);
+        List<String> petsAdopted =
+            ADOPTION_EVENTS.stream().map(e -> e.getMessage().getPayload().getValue().toString()).collect(toList());
+        LOGGER.debug("[GUSTAVO]: {} ==== {}", "Inside synchronized assertAllPetsAdopted()", "");
+        LOGGER.debug("[GUSTAVO]: {} ==== {}\n", "ADOPTION_EVENTS", petsAdopted);
+        return ADOPTION_EVENTS.size() >= ALL_PETS.size() && petsAdopted.containsAll(ALL_PETS);
       }
     });
   }

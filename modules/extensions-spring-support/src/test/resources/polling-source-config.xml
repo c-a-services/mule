@@ -10,7 +10,7 @@
     <flow name="vanilla" initialState="stopped">
         <petstore:pet-adoption-source>
             <scheduling-strategy>
-                <fixed-frequency frequency="1000"/>
+                <fixed-frequency frequency="10000"/>
             </scheduling-strategy>
         </petstore:pet-adoption-source>
         <flow-ref name="adopt"/>

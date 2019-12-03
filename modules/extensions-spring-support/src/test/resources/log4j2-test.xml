@@ -2,7 +2,7 @@
 <Configuration shutdownHook="disable">
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
-            <PatternLayout pattern="%-5p %d [%t] %c: %m%n"/>
+            <PatternLayout pattern="%-5p %d{ABSOLUTE} [%t] %c: %m%n"/>
         </Console>
     </Appenders>
 
@@ -20,6 +20,11 @@
         <!-- Mule classes -->
         <AsyncLogger name="org.mule" level="WARN"/>
         <AsyncLogger name="com.mulesoft" level="WARN"/>
+
+        <AsyncLogger name="org.mule.functional.api.component.FunctionalTestProcessor" level="DEBUG"/>
+        <AsyncLogger name="org.mule.runtime.core.internal.construct.FlowConstructLifecycleManager" level="DEBUG"/>
+        <AsyncLogger name="org.mule.runtime.core.internal.context.DefaultMuleContext" level="DEBUG"/>
+        <AsyncLogger name="org.mule.test.module.extension.source.PollingSourceTestCase" level="DEBUG"/>
 
         <AsyncRoot level="INFO">
             <AppenderRef ref="Console"/>
