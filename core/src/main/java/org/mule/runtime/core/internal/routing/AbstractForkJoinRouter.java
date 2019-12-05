@@ -10,12 +10,14 @@ package org.mule.runtime.core.internal.routing;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.core.api.exception.Errors.ComponentIdentifiers.Handleable.TIMEOUT;
 import static org.mule.runtime.core.internal.component.ComponentUtils.getFromAnnotatedObject;
+import static org.mule.runtime.core.internal.el.ExpressionLanguageUtils.compile;
 import static org.mule.runtime.core.internal.processor.strategy.DirectProcessingStrategyFactory.DIRECT_PROCESSING_STRATEGY_INSTANCE;
 import static org.mule.runtime.core.internal.util.rx.Operators.outputToTarget;
 import static org.mule.runtime.core.privileged.processor.MessageProcessors.processToApply;
 import static reactor.core.publisher.Flux.from;
 
 import org.mule.runtime.api.component.location.ConfigurationComponentLocator;
+import org.mule.runtime.api.el.CompiledExpression;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.message.ErrorType;
@@ -27,16 +29,15 @@ import org.mule.runtime.core.api.processor.AbstractMuleObjectOwner;
 import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
 import org.mule.runtime.core.internal.exception.MessagingException;
 import org.mule.runtime.core.internal.routing.ForkJoinStrategy.RoutingPair;
-import org.mule.runtime.core.privileged.processor.Router;
 import org.mule.runtime.core.privileged.processor.Scope;
 import org.mule.runtime.core.privileged.processor.chain.MessageProcessorChain;
 import org.mule.runtime.core.privileged.routing.CompositeRoutingException;
 
-import org.reactivestreams.Publisher;
-
 import java.util.function.Consumer;
 
 import javax.inject.Inject;
+
+import org.reactivestreams.Publisher;
 
 /**
  * Abstract base class for routers using a {@link ForkJoinStrategy} to process multiple {@link RoutingPair}'s and aggregate
@@ -61,6 +62,7 @@ public abstract class AbstractForkJoinRouter extends AbstractMuleObjectOwner<Mes
   private ExtendedExpressionManager expressionManager;
   private String target;
   private String targetValue = "#[payload]";
+  private CompiledExpression targetValueExpression;
 
   @Override
   public CoreEvent process(CoreEvent event) throws MuleException {
@@ -72,7 +74,7 @@ public abstract class AbstractForkJoinRouter extends AbstractMuleObjectOwner<Mes
     return from(publisher)
         .doOnNext(onEvent())
         .flatMap(event -> from(forkJoinStrategy.forkJoin(event, getRoutingPairs(event)))
-            .map(outputToTarget(event, target, targetValue, expressionManager))
+            .map(outputToTarget(event, target, targetValueExpression, expressionManager))
             // Ensure reference to current event is maintained in MessagingException. Reactor error handling does not
             // maintain this with flatMap and we can't use ThreadLocal event as that will have potentially been overwritten by
             // route chains.
@@ -103,6 +105,9 @@ public abstract class AbstractForkJoinRouter extends AbstractMuleObjectOwner<Mes
   public void initialise() throws InitialisationException {
     super.initialise();
     expressionManager = muleContext.getExpressionManager();
+    if (targetValue != null) {
+      targetValueExpression = compile(targetValue, expressionManager);
+    }
     timeoutScheduler = schedulerService.cpuLightScheduler();
     timeoutErrorType = muleContext.getErrorTypeRepository().getErrorType(TIMEOUT).get();
     maxConcurrency = maxConcurrency != null ? maxConcurrency : getDefaultMaxConcurrency();
