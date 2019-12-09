@@ -51,6 +51,7 @@ import org.mule.runtime.core.api.context.notification.ServerNotificationManager;
 import org.mule.runtime.core.api.context.thread.notification.ThreadNotificationService;
 import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.exception.FlowExceptionHandler;
+import org.mule.runtime.core.api.execution.ExceptionContextProvider;
 import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.api.processor.ReactiveProcessor;
 import org.mule.runtime.core.api.processor.strategy.ProcessingStrategy;
@@ -69,8 +70,10 @@ import org.mule.runtime.core.internal.util.MessagingExceptionResolver;
 import org.mule.runtime.core.privileged.component.AbstractExecutableComponent;
 import org.mule.runtime.core.privileged.event.BaseEventContext;
 import org.mule.runtime.core.privileged.event.PrivilegedEvent;
+import org.mule.runtime.core.privileged.exception.ErrorTypeLocator;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -131,6 +134,12 @@ abstract class AbstractMessageProcessorChain extends AbstractExecutableComponent
   private final List<ReactiveInterceptorAdapter> additionalInterceptors = new LinkedList<>();
 
   private boolean canProcessMessage = true;
+
+  @Inject
+  private ErrorTypeLocator errorTypeLocator;
+
+  @Inject
+  private Collection<ExceptionContextProvider> exceptionContextProviders;
 
   @Inject
   private InterceptorManager processorInterceptorManager;
@@ -221,7 +230,7 @@ abstract class AbstractMessageProcessorChain extends AbstractExecutableComponent
     final MessagingExceptionResolver exceptionResolver =
         (processor instanceof Component) ? new MessagingExceptionResolver((Component) processor) : null;
     final Function<MessagingException, MessagingException> messagingExceptionMapper =
-        resolveMessagingException(processor, e -> exceptionResolver.resolve(e, muleContext));
+        resolveMessagingException(processor, e -> exceptionResolver.resolve(e, errorTypeLocator, exceptionContextProviders));
 
     return (throwable, object) -> {
       throwable = unwrap(throwable);
