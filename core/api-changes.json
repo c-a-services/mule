@@ -3,6 +3,14 @@
     "revapi": {
       "ignore": [
         {
+          "code": "java.class.removed",
+          "old": "interface org.mule.runtime.core.privileged.registry.PreInitProcessor",
+          "package": "org.mule.runtime.core.privileged.registry",
+          "classSimpleName": "PreInitProcessor",
+          "elementKind": "interface",
+          "justification": "Diet Tooling"
+        },
+        {
           "code": "java.annotation.added",
           "old": "class org.mule.runtime.core.privileged.exception.AbstractExceptionListener",
           "new": "class org.mule.runtime.core.privileged.exception.AbstractExceptionListener",

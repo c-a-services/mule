@@ -243,11 +243,6 @@ public class SpringRegistry extends AbstractRegistry implements Injector {
   }
 
   @Override
-  public void registerObject(String key, Object value, Object metadata) throws RegistrationException {
-    registrationDelegate.registerObject(key, value, metadata);
-  }
-
-  @Override
   public void registerObjects(Map<String, Object> objects) throws RegistrationException {
     registrationDelegate.registerObjects(objects);
   }

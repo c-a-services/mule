@@ -392,7 +392,7 @@ public class ExtensionModelHelper {
     }
   }
 
-  private Optional<ExtensionModel> lookupExtensionModelFor(ComponentIdentifier componentIdentifier) {
+  public Optional<ExtensionModel> lookupExtensionModelFor(ComponentIdentifier componentIdentifier) {
     return extensionsModels.stream()
         .filter(e -> e.getXmlDslModel().getPrefix().equals(componentIdentifier.getNamespace()))
         .findFirst();

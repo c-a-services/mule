@@ -253,7 +253,7 @@ public class MuleRegistryHelper implements MuleRegistry {
    */
   @Override
   public final void registerTransformer(Transformer transformer) throws MuleException {
-    registerObject(getName(transformer), transformer, Transformer.class);
+    registerObject(getName(transformer), transformer);
   }
 
   public void notifyTransformerResolvers(Transformer t, TransformerResolver.RegistryAction action) {
@@ -291,7 +291,7 @@ public class MuleRegistryHelper implements MuleRegistry {
    */
   @Override
   public void registerFlowConstruct(FlowConstruct flowConstruct) throws MuleException {
-    registry.registerObject(getName(flowConstruct), flowConstruct, FlowConstruct.class);
+    registry.registerObject(getName(flowConstruct), flowConstruct);
   }
 
   /**
@@ -401,16 +401,6 @@ public class MuleRegistryHelper implements MuleRegistry {
     return registry.lookupByType(type);
   }
 
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void registerObject(String key, Object value, Object metadata) throws RegistrationException {
-    registry.registerObject(key, value, metadata);
-
-    postObjectRegistrationActions(value);
-  }
-
   public void postObjectRegistrationActions(Object value) {
     // TODO MULE-10238 - Remove this check once SimpleRegistry gets removed
     if (!postProcessedObjects.containsKey(value)) {
@@ -456,14 +446,6 @@ public class MuleRegistryHelper implements MuleRegistry {
     for (Object value : objects.values()) {
       postObjectRegistrationActions(value);
     }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public Object unregisterObject(String key, Object metadata) throws RegistrationException {
-    return registry.unregisterObject(key, metadata);
   }
 
   /**

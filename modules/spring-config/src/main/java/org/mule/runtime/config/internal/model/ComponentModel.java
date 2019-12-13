@@ -23,6 +23,7 @@ import org.mule.metadata.api.model.MetadataType;
 import org.mule.runtime.api.component.ComponentIdentifier;
 import org.mule.runtime.api.component.TypedComponentIdentifier;
 import org.mule.runtime.api.exception.MuleRuntimeException;
+import org.mule.runtime.api.meta.model.ExtensionModel;
 import org.mule.runtime.api.meta.model.config.ConfigurationModel;
 import org.mule.runtime.api.meta.model.connection.ConnectionProviderModel;
 import org.mule.runtime.api.meta.model.construct.ConstructModel;
@@ -95,6 +96,12 @@ public abstract class ComponentModel {
 
   private Object objectInstance;
   private Class<?> type;
+
+  private ExtensionModel extensionModel;
+
+  public ExtensionModel getExtensionModel() {
+    return extensionModel;
+  }
 
   /**
    * @return the line number in which the component was defined in the configuration file. It may be empty if the component was
@@ -250,7 +257,7 @@ public abstract class ComponentModel {
 
       @Override
       public void onConfiguration(ConfigurationModel model) {
-        setConfigurationModel(model);
+        setConfigurationModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get() ,model);
         onParameterizedModel(model);
       }
 
@@ -262,25 +269,25 @@ public abstract class ComponentModel {
 
       @Override
       public void onOperation(OperationModel model) {
-        setComponentModel(model);
+        setComponentModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get(), model);
         onParameterizedModel(model);
       }
 
       @Override
       public void onSource(SourceModel model) {
-        setComponentModel(model);
+        setComponentModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get(), model);
         onParameterizedModel(model);
       }
 
       @Override
       public void onConstruct(ConstructModel model) {
-        setComponentModel(model);
+        setComponentModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get(), model);
         onParameterizedModel(model);
       }
 
       @Override
       public void onNestableElement(NestableElementModel model) {
-        setNestableElementModel(model);
+        setNestableElementModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get(), model);
         if (model instanceof ParameterizedModel) {
           onParameterizedModel((ParameterizedModel) model);
         }
@@ -375,15 +382,18 @@ public abstract class ComponentModel {
     });
   }
 
-  public void setComponentModel(org.mule.runtime.api.meta.model.ComponentModel model) {
+  public void setComponentModel(ExtensionModel extensionModel, org.mule.runtime.api.meta.model.ComponentModel model) {
+    this.extensionModel = extensionModel;
     this.componentModel = model;
   }
 
-  public void setNestableElementModel(NestableElementModel nestableElementModel) {
+  public void setNestableElementModel(ExtensionModel extensionModel, NestableElementModel nestableElementModel) {
+    this.extensionModel = extensionModel;
     this.nestableElementModel = nestableElementModel;
   }
 
-  public void setConfigurationModel(ConfigurationModel model) {
+  public void setConfigurationModel(ExtensionModel extensionModel, ConfigurationModel model) {
+    this.extensionModel = extensionModel;
     this.configurationModel = model;
   }
 

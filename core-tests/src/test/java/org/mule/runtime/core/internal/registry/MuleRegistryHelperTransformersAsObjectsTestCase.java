@@ -42,7 +42,7 @@ public class MuleRegistryHelperTransformersAsObjectsTestCase extends AbstractMul
     muleRegistryHelper.registerObject("mockTransformerResolver", transformerResolver);
 
     muleRegistryHelper.registerObject("StringToAppleConverter", stringToApple);
-    muleRegistryHelper.registerObject("AppleToStringConverter", appleToString, appleToString.getClass());
+    muleRegistryHelper.registerObject("AppleToStringConverter", appleToString);
   }
 
   @Test

@@ -6,7 +6,7 @@
  */
 package org.mule.runtime.module.extension.internal.util;
 
-import org.springframework.util.ReflectionUtils;
+import org.mule.runtime.api.exception.MuleRuntimeException;
 
 import java.lang.reflect.Field;
 
@@ -35,7 +35,11 @@ public final class FieldSetter<Target, Value> {
    * @param value the value to set
    */
   public void set(Target target, Value value) {
-    ReflectionUtils.setField(field, target, value);
+    try {
+      field.set(target, value);
+    }catch (Exception e) {
+      throw new MuleRuntimeException(e);
+    }
   }
 
   /**

@@ -64,11 +64,8 @@ public class SimpleRegistry extends TransientRegistry implements Injector {
     return lookupObject(key);
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
-  protected void doRegisterObject(String key, Object object, Object metadata) throws RegistrationException {
+  protected void doRegisterObject(String key, Object object) throws RegistrationException {
     Object previous = doGet(key);
     if (previous != null) {
       if (logger.isDebugEnabled()) {
@@ -122,15 +119,7 @@ public class SimpleRegistry extends TransientRegistry implements Injector {
    */
   @Override
   public <T> T inject(T object) {
-    return (T) applyProcessors(object, null);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  protected Object applyProcessors(Object object, Object metadata) {
-    return injectInto(super.applyProcessors(object, metadata));
+    return injectInto((T) applyProcessors(object));
   }
 
   private void injectFieldDependencies() throws InitialisationException {

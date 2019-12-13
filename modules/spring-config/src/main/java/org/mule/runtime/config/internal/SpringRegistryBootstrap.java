@@ -122,10 +122,4 @@ public class SpringRegistryBootstrap extends AbstractRegistryBootstrap implement
   private void doRegisterObject(String key, BeanDefinitionBuilder builder) {
     beanDefinitionRegister.accept(key, builder.getBeanDefinition());
   }
-
-  private void registerInstance(String key, Object value) {
-    BeanDefinitionBuilder builder = BeanDefinitionBuilder.rootBeanDefinition(ConstantFactoryBean.class);
-    builder.addConstructorArgValue(value);
-    doRegisterObject(key, builder);
-  }
 }
