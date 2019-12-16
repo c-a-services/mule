@@ -498,7 +498,7 @@ public final class XmlExtensionLoaderDelegate {
 
   private void enrichModuleModel(final ComponentAst moduleModel, ExtensionModel result) {
     moduleModel.recursiveStream().forEach(comp -> result.getOperationModel(comp.getIdentifier().getName())
-        .ifPresent(model -> ((ComponentModel) comp).setComponentModel(model)));
+        .ifPresent(model -> ((ComponentModel) comp).setComponentModel(result, model)));
   }
 
   private ExtensionModel createExtensionModel(ExtensionDeclarer declarer) {

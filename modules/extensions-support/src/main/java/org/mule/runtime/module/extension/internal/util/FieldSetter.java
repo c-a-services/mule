@@ -37,7 +37,7 @@ public final class FieldSetter<Target, Value> {
   public void set(Target target, Value value) {
     try {
       field.set(target, value);
-    }catch (Exception e) {
+    } catch (Exception e) {
       throw new MuleRuntimeException(e);
     }
   }

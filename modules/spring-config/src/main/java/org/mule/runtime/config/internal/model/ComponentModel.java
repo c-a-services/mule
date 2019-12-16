@@ -257,13 +257,13 @@ public abstract class ComponentModel {
 
       @Override
       public void onConfiguration(ConfigurationModel model) {
-        setConfigurationModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get() ,model);
+        setConfigurationModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get(), model);
         onParameterizedModel(model);
       }
 
       @Override
       public void onConnectionProvider(ConnectionProviderModel model) {
-        setConnectionProviderModel(model);
+        setConnectionProviderModel(extensionModelHelper.lookupExtensionModelFor(getIdentifier()).get(), model);
         onParameterizedModel(model);
       }
 

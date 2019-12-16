@@ -141,7 +141,7 @@ public class DefaultsConfigurationBuilder extends AbstractConfigurationBuilder {
     registerObject(OBJECT_SCHEDULER_POOLS_CONFIG, SchedulerContainerPoolsConfig.getInstance(), muleContext);
     registerObject(OBJECT_SCHEDULER_BASE_CONFIG,
                    config().withPrefix(muleContext.getConfiguration().getId())
-                           .withShutdownTimeout(() -> muleContext.getConfiguration().getShutdownTimeout(), MILLISECONDS),
+                       .withShutdownTimeout(() -> muleContext.getConfiguration().getShutdownTimeout(), MILLISECONDS),
                    muleContext);
     registerObject(OBJECT_STORE_MANAGER, new MuleObjectStoreManager(), muleContext);
 
@@ -162,7 +162,7 @@ public class DefaultsConfigurationBuilder extends AbstractConfigurationBuilder {
     registerObject(OBJECT_TRANSFORMATION_SERVICE, new ExtendedTransformationService(muleContext), muleContext);
   }
 
-  private void registerMELExpressionLanguage(MuleContext muleContext) throws RegistrationException{
+  private void registerMELExpressionLanguage(MuleContext muleContext) throws RegistrationException {
     registerObject(OBJECT_EXPRESSION_LANGUAGE, new MVELExpressionLanguage(muleContext), muleContext);
   }
 

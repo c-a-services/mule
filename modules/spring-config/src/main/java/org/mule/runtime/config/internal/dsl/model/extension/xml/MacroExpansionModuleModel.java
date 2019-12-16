@@ -325,7 +325,7 @@ public class MacroExpansionModuleModel {
       processorChainModelChild.setParent(processorChainModel);
     }
 
-    processorChainModel.setComponentModel(operationModel);
+    processorChainModel.setComponentModel(extensionModel, operationModel);
     processorChainModel.setComponentType(operationRefModel.getComponentType());
 
     return processorChainModel;
