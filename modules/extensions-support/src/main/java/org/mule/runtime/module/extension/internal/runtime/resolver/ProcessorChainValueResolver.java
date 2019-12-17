@@ -26,7 +26,7 @@ import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.privileged.processor.chain.MessageProcessorChain;
 import org.mule.runtime.core.privileged.util.ObjectNameHelper;
 import org.mule.runtime.extension.api.runtime.route.Chain;
-import org.mule.runtime.module.extension.internal.runtime.operation.ImmutableProcessorChainExecutor;
+import org.mule.runtime.module.extension.internal.runtime.operation.chain.ImmutableProcessorChainExecutor;
 
 import java.util.List;
 import java.util.Map;

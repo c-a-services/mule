@@ -10,15 +10,23 @@ import static org.mule.runtime.core.api.processor.ReactiveProcessor.ProcessingTy
 
 import org.mule.runtime.api.meta.model.ExtensionModel;
 import org.mule.runtime.api.meta.model.construct.ConstructModel;
+import org.mule.runtime.api.scheduler.Scheduler;
+import org.mule.runtime.core.api.event.CoreEvent;
 import org.mule.runtime.core.api.extension.ExtensionManager;
 import org.mule.runtime.core.api.processor.Processor;
 import org.mule.runtime.core.api.retry.policy.RetryPolicyTemplate;
 import org.mule.runtime.core.api.streaming.CursorProviderFactory;
 import org.mule.runtime.core.internal.policy.PolicyManager;
 import org.mule.runtime.core.internal.processor.ParametersResolverProcessor;
+import org.mule.runtime.extension.api.runtime.config.ConfigurationInstance;
 import org.mule.runtime.extension.api.runtime.config.ConfigurationProvider;
+import org.mule.runtime.module.extension.api.runtime.privileged.ExecutionContextAdapter;
+import org.mule.runtime.module.extension.internal.runtime.operation.chain.DefaultChainContext;
 import org.mule.runtime.module.extension.internal.runtime.resolver.ResolverSet;
 import org.mule.runtime.module.extension.internal.util.ReflectionCache;
+
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * An implementation of a {@link ComponentMessageProcessor} for {@link ConstructModel construct models}
@@ -46,6 +54,14 @@ public class ConstructMessageProcessor extends ComponentMessageProcessor<Constru
   @Override
   protected void validateOperationConfiguration(ConfigurationProvider configurationProvider) {
     // Constructs are config-less
+  }
+
+  @Override
+  protected ExecutionContextAdapter<ConstructModel> createExecutionContext(Optional<ConfigurationInstance> configuration,
+                                                                           Map<String, Object> resolvedParameters,
+                                                                           CoreEvent event, Scheduler currentScheduler) {
+    ExecutionContextAdapter<ConstructModel> ctx = super.createExecutionContext(configuration, resolvedParameters, event, currentScheduler);
+    ctx.setVariable("CHAIN_CONTEXT", new DefaultChainContext(ctx.getComponent().getLocation()));
   }
 
   @Override

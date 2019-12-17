@@ -19,6 +19,7 @@ import org.mule.runtime.extension.api.annotation.param.stereotype.AllowedStereot
 import org.mule.runtime.extension.api.runtime.operation.Result;
 import org.mule.runtime.extension.api.runtime.process.CompletionCallback;
 import org.mule.runtime.extension.api.runtime.route.Chain;
+import org.mule.runtime.extension.api.runtime.route.ChainContext;
 import org.mule.runtime.extension.api.stereotype.ValidatorStereotype;
 
 import java.util.Map;
@@ -74,6 +75,7 @@ public class HeisenbergScopes implements Initialisable {
 
   @MediaType(TEXT_PLAIN)
   public void neverFailsWrapper(@Optional Chain optionalProcessors,
+                                ChainContext context,
                                 CompletionCallback<String, Object> callback) {
     if (optionalProcessors == null) {
       callback.success(Result.<String, Object>builder().output("EMPTY").build());
