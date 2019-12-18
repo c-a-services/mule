@@ -151,6 +151,7 @@ public abstract class ComponentMessageProcessor<T extends ComponentModel> extend
   protected ComponentExecutor componentExecutor;
   protected ReturnDelegate returnDelegate;
   protected PolicyManager policyManager;
+  private Supplier<ExecutionMediator> executionMediatorFactory;
 
   private String resolvedProcessorRepresentation;
   private boolean initialised = false;
@@ -480,6 +481,10 @@ public abstract class ComponentMessageProcessor<T extends ComponentModel> extend
   }
 
   protected ExecutionMediator createExecutionMediator() {
+    if (executionMediatorFactory != null) {
+      return executionMediatorFactory.get();
+    }
+
     return new DefaultExecutionMediator(extensionModel, componentModel, connectionManager, muleContext.getErrorTypeRepository());
   }
 
@@ -570,5 +575,9 @@ public abstract class ComponentMessageProcessor<T extends ComponentModel> extend
       return location.equals(component.getLocation());
     }
     return false;
+  }
+
+  public void setExecutionMediatorFactory(Supplier<ExecutionMediator> executionMediatorFactory) {
+    this.executionMediatorFactory = executionMediatorFactory;
   }
 }
