@@ -8,7 +8,6 @@ package org.mule.runtime.core.privileged.processor;
 
 import static java.lang.Thread.currentThread;
 import static java.util.Arrays.asList;
-import static java.util.Collections.newSetFromMap;
 import static java.util.Optional.empty;
 import static org.mule.runtime.api.functional.Either.left;
 import static org.mule.runtime.api.functional.Either.right;
@@ -51,8 +50,6 @@ import org.mule.runtime.core.privileged.processor.chain.MessageProcessorChain;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -488,7 +485,6 @@ public class MessageProcessors {
                 FluxSinkRecorder<Either<MessagingException, CoreEvent>> errorSwitchSinkSinkRef = new FluxSinkRecorder<>();
                 final FluxSinkRecorderToReactorSinkAdapter<Either<MessagingException, CoreEvent>> errorSwitchSinkSinkRefAdapter =
                     new FluxSinkRecorderToReactorSinkAdapter<>(errorSwitchSinkSinkRef);
-                Set<BaseEventContext> seenContexts = newSetFromMap(new WeakHashMap<BaseEventContext, Boolean>());
 
                 return Flux.from(eventChildCtxPub)
                     .doOnNext(eventChildCtx -> childContextResponseHandler(eventChildCtx, errorSwitchSinkSinkRefAdapter,
@@ -503,7 +499,6 @@ public class MessageProcessors {
                     .mergeWith(create(errorSwitchSinkSinkRef))
 
                     .map(childContextResponseMapper())
-                    .distinct(event -> (BaseEventContext) event.getContext(), () -> seenContexts)
                     .map(MessageProcessors::toParentContext);
               }
             }));
