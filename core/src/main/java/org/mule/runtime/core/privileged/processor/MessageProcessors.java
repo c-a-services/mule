@@ -446,7 +446,7 @@ public class MessageProcessors {
         .transform(processor)
         .doOnNext(completeSuccessIfNeeded())
         .switchIfEmpty(Mono.<Either<MessagingException, CoreEvent>>create(errorSwitchSinkSinkRef)
-            .map(childContextResponseMapper())
+            .map(propagateErrorResponseMapper())
             .toProcessor())
         .map(MessageProcessors::toParentContext)
         .subscriberContext(ctx -> ctx.put(WITHIN_PROCESS_WITH_CHILD_CONTEXT, true));
@@ -498,8 +498,7 @@ public class MessageProcessors {
                     .doOnComplete(() -> errorSwitchSinkSinkRef.complete())
                     .mergeWith(create(errorSwitchSinkSinkRef))
 
-                    .map(childContextResponseMapper())
-                    .map(MessageProcessors::toParentContext);
+                    .map(propagateErrorResponseMapper().andThen(MessageProcessors::toParentContext));
               }
             }));
   }
@@ -526,7 +525,7 @@ public class MessageProcessors {
     });
   }
 
-  private static Function<? super Either<MessagingException, CoreEvent>, ? extends CoreEvent> childContextResponseMapper() {
+  private static Function<? super Either<MessagingException, CoreEvent>, ? extends CoreEvent> propagateErrorResponseMapper() {
     return result -> result.reduce(me -> {
       throw propagateWrappingFatal(me);
     }, response -> response);
