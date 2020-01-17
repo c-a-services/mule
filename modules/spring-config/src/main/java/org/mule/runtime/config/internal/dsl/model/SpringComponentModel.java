@@ -148,6 +148,7 @@ public class SpringComponentModel extends ComponentModel implements ComponentAst
   }
 
   private void populateParameterAsts() {
+
     if (!parameterAstsPopulated.compareAndSet(false, true)) {
       return;
     }
@@ -184,6 +185,7 @@ public class SpringComponentModel extends ComponentModel implements ComponentAst
           }
         }));
   }
+
 
   private Optional<ParameterModel> findParameterModel(String paramName) {
     // For sources, we need to account for the case where parameters in the callbacks may have colliding names.

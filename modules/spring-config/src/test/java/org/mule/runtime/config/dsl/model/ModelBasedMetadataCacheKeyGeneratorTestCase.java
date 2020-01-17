@@ -82,6 +82,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
@@ -653,46 +654,60 @@ public class ModelBasedMetadataCacheKeyGeneratorTestCase extends AbstractDslMode
   }
 
   @Test
-  public void partialFetchingWithDifferentValuesOnDifferentOperationsGeneratesSameHashForKeys() throws Exception {
+  public void partialFetchingWithDifferentValuesOnDifferentLevelsGeneratesDifferentHashForMetadataOutput() throws Exception {
     mockMultiLevelMetadataKeyId(operation);
-    mockMultiLevelMetadataKeyId(anotherOperation);
-    setPartialFetchingMock(operation);
-    setPartialFetchingMock(anotherOperation);
+    //setPartialFetchingMock(operation);
+    Map<String, String> inputResolvers = ImmutableMap.<String, String>builder()
+        .put(METADATA_KEY_PART_1, "inputResolver")
+        .put(METADATA_KEY_PART_2, "inputResolver")
+        .put(METADATA_KEY_PART_3, "inputResolver")
+        .build();
+
+    mockTypeResolversInformationModelProperty(operation, CATEGORY_NAME, "outputResolver", "attributesResolver", inputResolvers,
+                                              "keysResolver");
 
 
     ArtifactDeclaration declaration = getBaseApp();
 
     ComponentElementDeclaration operationDeclaration = ((ConstructElementDeclaration) declaration.getGlobalElements().get(1))
         .getComponents().get(0);
-    ComponentElementDeclaration anotherOperationDeclaration =
-        ((ConstructElementDeclaration) declaration.getGlobalElements().get(1))
-            .getComponents().get(1);
 
     ParameterGroupElementDeclaration keyGroup = new ParameterGroupElementDeclaration(METADATA_KEY_GROUP);
-    ParameterGroupElementDeclaration anotherKeyGroup = new ParameterGroupElementDeclaration(METADATA_KEY_GROUP);
 
     operationDeclaration.addParameterGroup(keyGroup);
-    anotherOperationDeclaration.addParameterGroup(anotherKeyGroup);
 
+    // First set of values for part 1 and part 2
     final String keyPart1Value = "localhost";
     keyGroup.addParameter(newParam(METADATA_KEY_PART_1, keyPart1Value));
-    anotherKeyGroup.addParameter(newParam(METADATA_KEY_PART_1, keyPart1Value));
-
     keyGroup.addParameter(newParam(METADATA_KEY_PART_2, "8080"));
-    anotherKeyGroup.addParameter(newParam(METADATA_KEY_PART_2, "6666"));
 
-    final String keyPart3Value = "/api";
-    keyGroup.addParameter(newParam(METADATA_KEY_PART_3, keyPart3Value));
-    anotherKeyGroup.addParameter(newParam(METADATA_KEY_PART_3, keyPart3Value));
+    // Generate the key hash for the output
+    //MetadataCacheId operationHash = getOutputMetadataKeyHash(declaration, OPERATION_LOCATION);
+    MetadataCacheId inputMetadataKeyHash = getInputMetadataKeyHash(declaration, OPERATION_LOCATION, METADATA_KEY_PART_2);
 
-    MetadataCacheId operationHash = getKeyHash(declaration, OPERATION_LOCATION);
-    MetadataCacheId anotherOperationHash = getKeyHash(declaration, ANOTHER_OPERATION_LOCATION);
-    LOGGER.debug(operationHash.toString());
-    LOGGER.debug(anotherOperationHash.toString());
+    // Creates a new declaration
+    declaration = getBaseApp();
 
-    assertThat(operationHash, is(not((anotherOperationHash))));
+    operationDeclaration = ((ConstructElementDeclaration) declaration.getGlobalElements().get(1))
+        .getComponents().get(0);
+
+    keyGroup = new ParameterGroupElementDeclaration(METADATA_KEY_GROUP);
+
+    operationDeclaration.addParameterGroup(keyGroup);
+
+    // Second set of values for part 1 and part 2 where part 1 has the same value and only part 2 has changed
+    keyGroup.addParameter(newParam(METADATA_KEY_PART_1, keyPart1Value));
+    keyGroup.addParameter(newParam(METADATA_KEY_PART_2, "6666"));
+
+    //MetadataCacheId anotherOperationHash = getOutputMetadataKeyHash(declaration, OPERATION_LOCATION);
+    MetadataCacheId anotherInputMetadataKeyHash = getInputMetadataKeyHash(declaration, OPERATION_LOCATION, METADATA_KEY_PART_2);
+
+    //LOGGER.debug(operationHash.toString());
+    //LOGGER.debug(anotherOperationHash.toString());
+
+    //assertThat(operationHash, is(not((anotherOperationHash))));
+    assertThat(inputMetadataKeyHash, is(not((anotherInputMetadataKeyHash))));
   }
-
 
   private void mockRequiredForMetadataModelProperty(EnrichableModel model, List<String> parameterNames) {
     if (parameterNames == null) {
@@ -759,6 +774,23 @@ public class ModelBasedMetadataCacheKeyGeneratorTestCase extends AbstractDslMode
         .get(Location.builderFromStringRepresentation(location).build())
         .get();
     return createGenerator(app).getIdForMetadataKeys(component).get();
+  }
+
+  private MetadataCacheId getInputMetadataKeyHash(ArtifactDeclaration declaration, String location, String parameterName)
+      throws Exception {
+    ApplicationModel app = loadApplicationModel(declaration);
+    ComponentAst component = new Locator(app)
+        .get(Location.builderFromStringRepresentation(location).build())
+        .get();
+    return createGenerator(app).getIdForComponentInputMetadata(component, parameterName).get();
+  }
+
+  private MetadataCacheId getOutputMetadataKeyHash(ArtifactDeclaration declaration, String location) throws Exception {
+    ApplicationModel app = loadApplicationModel(declaration);
+    ComponentAst component = new Locator(app)
+        .get(Location.builderFromStringRepresentation(location).build())
+        .get();
+    return createGenerator(app).getIdForComponentOutputMetadata(component).get();
   }
 
   private MetadataCacheId getGlobalId(ArtifactDeclaration declaration) throws Exception {

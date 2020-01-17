@@ -306,42 +306,55 @@ public abstract class ComponentModel {
         ((ComponentAst) ComponentModel.this).recursiveStream()
             // .filter(childComp -> childComp != ComponentModel.this)
             .forEach(childComp -> {
-              extensionModelHelper.findParameterModel(childComp.getIdentifier(), model)
-                  // do not handle the callback parameters from the sources
-                  .filter(paramModel -> {
-                    if (model instanceof SourceModel) {
-                      return !(((SourceModel) model).getSuccessCallback()
-                          .map(sc -> sc.getAllParameterModels().contains(paramModel))
-                          .orElse(false) ||
-                          ((SourceModel) model).getErrorCallback()
-                              .map(ec -> ec.getAllParameterModels().contains(paramModel))
-                              .orElse(false));
-                    } else {
-                      return true;
-                    }
-                  })
-                  .filter(paramModel -> paramModel.getDslConfiguration().allowsInlineDefinition())
-                  .ifPresent(paramModel -> {
-                    paramChildren.add(childComp);
-
-                    if (paramModel.getExpressionSupport() == NOT_SUPPORTED) {
-                      // TODO MULE-17710 do a recursive navigation to set the field metadata on the inner ComponentAsts of
-                      // childComp
-                      setParameter(paramModel, new DefaultComponentParameterAst(childComp,
-                                                                                () -> paramModel, childComp.getMetadata()));
-
-                      ((ComponentModel) childComp)
-                          .setMetadataTypeModelAdapter(createParameterizedTypeModelAdapter(paramModel.getType(),
-                                                                                           extensionModelHelper));
-                    } else {
-                      setParameter(paramModel, new DefaultComponentParameterAst(((ComponentModel) childComp).getTextContent(),
-                                                                                () -> paramModel, childComp.getMetadata()));
-                    }
-                  });
+              doHandleParameter(extensionModelHelper, model, paramChildren, childComp);
             });
 
         // TODO MULE-17711 When these are removed, the ast parameters may need to be traversed with recursive/direct spliterators
         // ComponentModel.this.innerComponents.removeAll(paramChildren);
+      }
+
+      private void doHandleParameter(ExtensionModelHelper extensionModelHelper, ParameterizedModel model, Set<ComponentAst> paramChildren, ComponentAst childComp) {
+        extensionModelHelper.findParameterModel(childComp.getIdentifier(), model)
+                // do not handle the callback parameters from the sources
+                .filter(paramModel -> {
+                  if (model instanceof SourceModel) {
+                    return !(((SourceModel) model).getSuccessCallback()
+                                     .map(sc -> sc.getAllParameterModels().contains(paramModel))
+                                     .orElse(false) ||
+                             ((SourceModel) model).getErrorCallback()
+                                     .map(ec -> ec.getAllParameterModels().contains(paramModel))
+                                     .orElse(false));
+                  }
+                  else {
+                    return true;
+                  }
+                })
+                .filter(paramModel -> paramModel.getDslConfiguration().allowsInlineDefinition())
+                .ifPresent(paramModel -> {
+                  paramChildren.add(childComp);
+
+                  if (paramModel.getExpressionSupport() == NOT_SUPPORTED) {
+                    // TODO MULE-17710 do a recursive navigation to set the field metadata on the inner ComponentAsts of
+                    // childComp
+                    setParameter(paramModel, new DefaultComponentParameterAst(childComp,
+                                                                              () -> paramModel, childComp.getMetadata()));
+
+                    MetadataTypeModelAdapter parameterizedTypeModelAdapter = createParameterizedTypeModelAdapter(paramModel.getType(),
+                                                                                                                 extensionModelHelper);
+                    ((ComponentModel) childComp)
+                            .setMetadataTypeModelAdapter(parameterizedTypeModelAdapter);
+
+                    childComp.directChildrenStream()
+                            .filter(inner -> inner != childComp)
+                            .forEach(inner -> {
+                              doHandleParameter(extensionModelHelper, parameterizedTypeModelAdapter, paramChildren, inner);
+                            });
+                  }
+                  else {
+                    setParameter(paramModel, new DefaultComponentParameterAst(((ComponentModel) childComp).getTextContent(),
+                                                                              () -> paramModel, childComp.getMetadata()));
+                  }
+                });
       }
 
       private MetadataTypeModelAdapter findParameterModel(ExtensionModelHelper extensionModelHelper, ParameterizedModel model,
