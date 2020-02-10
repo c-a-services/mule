@@ -11,8 +11,8 @@ import static org.mule.runtime.api.util.Preconditions.checkArgument;
 
 import org.mule.runtime.api.meta.model.parameter.ParameterModel;
 import org.mule.runtime.api.util.LazyValue;
+import org.mule.runtime.api.util.collection.SmallMap;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.google.common.base.Objects;
@@ -35,7 +35,7 @@ public class ResolverSetResult {
    */
   public static class Builder {
 
-    LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+    Map<String, Object> values = new SmallMap<>();
 
     Builder() {}
 
