@@ -14,7 +14,7 @@ import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.initialiseIfNeeded;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.startIfNeeded;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.stopIfNeeded;
-import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
+import static org.mule.runtime.core.api.util.ClassUtils.setContextClassLoader;
 import static org.mule.runtime.core.internal.event.NullEventFactory.getNullEvent;
 import static org.mule.runtime.core.internal.util.FunctionalUtils.safely;
 import static org.mule.runtime.module.extension.internal.runtime.connectivity.oauth.ExtensionsOAuthUtils.getCallbackValuesExtractors;
@@ -186,8 +186,11 @@ public class PlatformManagedOAuthConnectionProvider<C> implements OAuthConnectio
                                              false,
                                              new ReflectionCache(),
                                              expressionManager);
-
-    return (ConnectionProvider<C>) withContextClassLoader(getClassLoader(oauthConfig.getExtensionModel()), () -> {
+    Thread thread = Thread.currentThread();
+    ClassLoader currentClassLoader = thread.getContextClassLoader();
+    ClassLoader extensionClassLoader = getClassLoader(oauthConfig.getExtensionModel());
+    setContextClassLoader(thread, currentClassLoader, extensionClassLoader);
+    try {
       ResolverSet delegateResolverSet =
           resolver.getParametersAsResolverSet(oauthConfig.getDelegateConnectionProviderModel(), muleContext);
       ConnectionProviderObjectBuilder builder =
@@ -198,7 +201,6 @@ public class PlatformManagedOAuthConnectionProvider<C> implements OAuthConnectio
                                                        oauthConfig.getExtensionModel(),
                                                        expressionManager,
                                                        muleContext);
-
       CoreEvent event = getNullEvent(muleContext);
       ValueResolvingContext ctx = null;
       try {
@@ -206,14 +208,16 @@ public class PlatformManagedOAuthConnectionProvider<C> implements OAuthConnectio
             .withConfig(oauthConfig.getConfigurationInstance())
             .build();
 
-        return builder.build(ctx);
+        return (ConnectionProvider<C>) builder.build(ctx);
       } finally {
         ((BaseEventContext) event.getContext()).success();
         if (ctx != null) {
           ctx.close();
         }
       }
-    }, MuleException.class, e -> e);
+    } finally {
+      setContextClassLoader(thread, extensionClassLoader, currentClassLoader);
+    }
   }
 
   private PlatformManagedConnectionDescriptor fetchConnectionDescriptor() throws MuleException {
@@ -229,9 +233,9 @@ public class PlatformManagedOAuthConnectionProvider<C> implements OAuthConnectio
 
   private MuleException newConnectionDescriptorException(Throwable e) {
     return new DefaultMuleException(
-                                    "Could not obtain descriptor for Platform Managed OAuth Connection "
-                                        + oauthConfig.getConnectionUri(),
-                                    e);
+        "Could not obtain descriptor for Platform Managed OAuth Connection "
+            + oauthConfig.getConnectionUri(),
+        e);
   }
 
   private FieldSetter<ConnectionProvider<C>, OAuthState> getOAuthStateSetter(ConnectionProvider<C> delegate) {
@@ -259,8 +263,8 @@ public class PlatformManagedOAuthConnectionProvider<C> implements OAuthConnectio
 
   private IllegalConnectionProviderModelDefinitionException illegalDelegateException() {
     return new IllegalConnectionProviderModelDefinitionException(format(
-                                                                        "Configuration '%s' cannot have a platform managed OAuth connection that delegates into itself",
-                                                                        oauthConfig.getOwnerConfigName()));
+        "Configuration '%s' cannot have a platform managed OAuth connection that delegates into itself",
+        oauthConfig.getOwnerConfigName()));
   }
 
   @Override
